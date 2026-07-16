@@ -1,0 +1,200 @@
+// AreBook - Flight Booking Platform
+// This file goes in: prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum AdminRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum TripType {
+  ONE_WAY
+  ROUND_TRIP
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum SeatClass {
+  BUSINESS
+  GUEST
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+// ==================== SHARED IDENTITY ====================
+// Person holds the personal data shared between Customer and Passenger.
+// Admin stays fully separate (different domain: staff, not travelers).
+
+model Person {
+  id        Int       @id @default(autoincrement())
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  gender    String
+  dateBirth DateTime
+
+  customer  Customer?
+  passenger Passenger?
+
+  @@map("persons")
+}
+
+model Customer {
+  id           Int      @id @default(autoincrement())
+  personId     Int      @unique
+  person       Person   @relation(fields: [personId], references: [id])
+  passwordHash String
+
+  bookings     Booking[]
+
+  @@map("customers")
+}
+
+model Admin {
+  id           Int       @id @default(autoincrement())
+  passwordHash String
+  firstName    String
+  lastName     String
+  email        String    @unique
+  gender       String
+  dateBirth    DateTime
+  salary       Float
+  role         AdminRole
+  phone        String
+
+  @@map("admins")
+}
+
+// ==================== FLEET ====================
+
+model Plane {
+  id                Int      @id @default(autoincrement())
+  nbrSeats          Int
+  nbrBusinessSeats  Int
+  nbrGuestSeats     Int
+  maxWeight         Float
+  aircraftType      String
+  serviceStartDate  DateTime
+
+  maintenances      PlanMaintenance[]
+  trips             Trip[]
+
+  @@map("planes")
+}
+
+model PlanMaintenance {
+  id          Int      @id @default(autoincrement())
+  planId      Int
+  plane       Plane    @relation(fields: [planId], references: [id])
+  dateMaint   DateTime
+  description String
+  notes       String?
+
+  @@map("plan_maintenances")
+}
+
+model Trip {
+  id                 Int      @id @default(autoincrement())
+  departureDateTime  DateTime
+  arrivalDateTime    DateTime
+  planId             Int
+  plane              Plane    @relation(fields: [planId], references: [id])
+  priceBusiness      Float
+  priceGuest         Float
+  departingPlace     String
+  destination        String
+
+  bookings           Booking[]
+
+  @@map("trips")
+}
+
+// ==================== BOOKING ====================
+
+model Booking {
+  id                Int           @id @default(autoincrement())
+  customerId        Int
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  tripId            Int
+  trip              Trip          @relation(fields: [tripId], references: [id])
+  tripType          TripType
+  status            BookingStatus @default(PENDING)
+  bookingDate       DateTime      @default(now())
+
+  // Self-relation: links a one-way leg to its return leg for round trips
+  linkedBookingId   Int?          @unique
+  linkedBooking     Booking?      @relation("BookingLink", fields: [linkedBookingId], references: [id])
+  linkedFromBooking Booking?      @relation("BookingLink")
+
+  passengers        Passenger[]
+  payment           Payment?
+
+  @@map("bookings")
+}
+
+model Passenger {
+  id        Int       @id @default(autoincrement())
+  personId  Int       @unique
+  person    Person    @relation(fields: [personId], references: [id])
+  bookingId Int
+  booking   Booking   @relation(fields: [bookingId], references: [id])
+  docId     Int?      @unique
+  document  Document? @relation(fields: [docId], references: [id])
+  seatClass SeatClass
+
+  specialRequests SpecialRequest[]
+
+  @@map("passengers")
+}
+
+model Document {
+  id           Int      @id @default(autoincrement())
+  expiryDate   DateTime
+  country      String
+  number       String
+  documentType String
+
+  passenger    Passenger?
+
+  @@map("documents")
+}
+
+model SpecialRequest {
+  id          Int       @id @default(autoincrement())
+  passengerId Int
+  passenger   Passenger @relation(fields: [passengerId], references: [id])
+  requestType String
+  price       Float
+
+  @@map("special_requests")
+}
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  bookingId   Int           @unique
+  booking     Booking       @relation(fields: [bookingId], references: [id])
+  amount      Float
+  status      PaymentStatus @default(PENDING)
+  paymentDate DateTime?
+
+  @@map("payments")
+}
