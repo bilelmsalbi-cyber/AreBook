@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 type TripType = "ONE_WAY" | "ROUND_TRIP";
 
 export default function Home() {
+  //
+  // throw new Error("Testing error page");
   const router = useRouter();
 
   const [tripType, setTripType] = useState<TripType>("ONE_WAY");
@@ -32,6 +34,9 @@ export default function Home() {
     params.set("departingPlace", departingPlace);
     params.set("destination", destination);
     if (departureDate) params.set("departureDate", departureDate);
+    params.set("adults", adults.toString());
+    params.set("children", children.toString());
+    params.set("infants", infants.toString());
 
     router.push(`/results?${params.toString()}`);
   }

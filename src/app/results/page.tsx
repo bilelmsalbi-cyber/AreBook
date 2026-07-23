@@ -24,6 +24,9 @@ function ResultsContent() {
   const departingPlace = searchParams.get("departingPlace") || "";
   const destination = searchParams.get("destination") || "";
   const departureDate = searchParams.get("departureDate") || "";
+  const adults = searchParams.get("adults") || "1";
+  const children = searchParams.get("children") || "0";
+  const infants = searchParams.get("infants") || "0";
 
   const [results, setResults] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,9 +96,8 @@ function ResultsContent() {
               {results.map((trip) => (
                 <Link
                   key={trip.id}
-                  href={`/booking/${trip.id}`}
-                  className="flex flex-col justify-between gap-4 rounded-xl border border-[#DCEEFF] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:border-[#2563EB] hover:shadow-[0_20px_40px_-10px_rgba(37,99,235,0.35)] md:flex-row md:items-center"
-                >
+                  href={`/booking/${trip.id}?adults=${adults}&children=${children}&infants=${infants}`}
+                  className="flex flex-col justify-between gap-4 rounded-xl border border-[#DCEEFF] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:border-[#2563EB] hover:shadow-[0_20px_40px_-10px_rgba(37,99,235,0.35)] md:flex-row md:items-center">
                   <div>
                     <p className="font-mono text-xs text-[#2563EB]">
                       {trip.plane.aircraftType}

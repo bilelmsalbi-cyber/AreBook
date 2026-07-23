@@ -90,16 +90,22 @@ model Trip {
 
 model Booking {
   id                Int           @id @default(autoincrement())
-  customerId        Int
+  customerId        Int?
+  customer          Customer?     @relation(fields: [customerId], references: [id])
   tripId            Int
+  trip              Trip          @relation(fields: [tripId], references: [id])
   tripType          TripType
   status            BookingStatus @default(PENDING)
   bookingDate       DateTime      @default(now())
+
+  seatClass         SeatClass
+  seatsHeld         Int
+  expiresAt         DateTime?
+
   linkedBookingId   Int?          @unique
-  customer          Customer      @relation(fields: [customerId], references: [id])
   linkedBooking     Booking?      @relation("BookingLink", fields: [linkedBookingId], references: [id])
   linkedFromBooking Booking?      @relation("BookingLink")
-  trip              Trip          @relation(fields: [tripId], references: [id])
+
   passengers        Passenger[]
   payment           Payment?
 
@@ -107,14 +113,14 @@ model Booking {
 }
 
 model Passenger {
-  id              Int              @id @default(autoincrement())
-  personId        Int              @unique
-  bookingId       Int
-  docId           Int?             @unique
-  seatClass       SeatClass
-  booking         Booking          @relation(fields: [bookingId], references: [id])
-  document        Document?        @relation(fields: [docId], references: [id])
-  person          Person           @relation(fields: [personId], references: [id])
+  id        Int       @id @default(autoincrement())
+  personId  Int       @unique
+  person    Person    @relation(fields: [personId], references: [id])
+  bookingId Int
+  booking   Booking   @relation(fields: [bookingId], references: [id])
+  docId     Int?      @unique
+  document  Document? @relation(fields: [docId], references: [id])
+
   specialRequests SpecialRequest[]
 
   @@map("passengers")
