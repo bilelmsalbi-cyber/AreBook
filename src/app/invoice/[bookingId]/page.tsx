@@ -101,6 +101,16 @@ function InvoiceContent() {
 
   const total = seatsSubtotal + servicesSubtotal;
 
+  async function handlePayment() {
+    const res = await fetch(`/api/bookings/${bookingId}/pay`, { method: "POST" });
+    const data = await res.json();
+      if (!res.ok || !data.url) {
+        alert(data.error || "Could not start payment.");
+        return;
+      }
+       window.location.href = data.url;
+  }
+
   return (
     <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
       <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
@@ -183,9 +193,10 @@ function InvoiceContent() {
 
           <button
             type="button"
+            onClick={handlePayment}
             className="w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl"
           >
-            Proceed to Payment
+           Proceed to Payment
           </button>
         </div>
       </section>

@@ -102,6 +102,9 @@ model Booking {
   seatsHeld         Int
   expiresAt         DateTime?
 
+  pnr               String?       @unique   // 
+  stripeSessionId   String?       @unique   // 
+
   linkedBookingId   Int?          @unique
   linkedBooking     Booking?      @relation("BookingLink", fields: [linkedBookingId], references: [id])
   linkedFromBooking Booking?      @relation("BookingLink")

@@ -64,6 +64,13 @@ export async function POST(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
+    if (booking.status === "CONFIRMED") {
+     return NextResponse.json(
+     { error: "This booking has already been paid and cannot be modified" },
+     { status: 409 }
+     );
+    }
+
     if (booking.status !== "PENDING") {
       return NextResponse.json(
         { error: "This booking is no longer pending" },
