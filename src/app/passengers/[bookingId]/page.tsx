@@ -46,6 +46,22 @@ function PassengersContent() {
     sessionStorage.setItem(passengersStorageKey(bookingId), JSON.stringify(passengers));
   }, [passengers, bookingId]);
 
+
+
+  async function handleViewInvoice() {
+  const res = await fetch(`/api/bookings/${bookingId}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passengers }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "Something went wrong.");
+    return;
+  }
+  router.push(`/invoice/${bookingId}`);
+}
+
   function updatePassenger(index: number, field: keyof PassengerForm, value: string | boolean) {
     setPassengers((prev) =>
       prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
@@ -231,9 +247,10 @@ function PassengersContent() {
 
           <button
             type="button"
+            onClick={handleViewInvoice}
             className="w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl"
           >
-            Payment
+           View Invoice
           </button>
         </div>
       </section>
