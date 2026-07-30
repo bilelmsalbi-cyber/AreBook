@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
+import { resend } from "@/lib/resend";
+import { buildPaymentConfirmationEmail } from "@/lib/emails/paymentConfirmation";
 
 function generatePnrCandidate(): string {
-  // Excludes 0, O, 1, I to avoid visual confusion — same convention airlines use
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
   for (let i = 0; i < 6; i++) {
@@ -45,7 +46,14 @@ export async function POST(request: NextRequest) {
     const bookingId = parseInt(session.metadata?.bookingId || "", 10);
 
     if (!isNaN(bookingId)) {
-      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          trip: { include: { plane: true } },
+          passengers: { include: { person: true } },
+          payment: true,
+        },
+      });
 
       // Idempotency guard: only act once, even if Stripe retries the webhook
       if (booking && booking.status !== "CONFIRMED") {
@@ -61,6 +69,34 @@ export async function POST(request: NextRequest) {
             data: { status: "PAID", paymentDate: new Date() },
           }),
         ]);
+
+        // Send confirmation email to the first passenger
+        const firstPassenger = booking.passengers[0];
+        if (firstPassenger) {
+          const { html, text } = buildPaymentConfirmationEmail({
+            pnr,
+            firstName: firstPassenger.person.firstName,
+            departingPlace: booking.trip.departingPlace,
+            destination: booking.trip.destination,
+            departureDateTime: booking.trip.departureDateTime.toISOString(),
+            aircraftType: booking.trip.plane.aircraftType,
+            totalAmount: booking.payment?.amount ?? 0,
+          });
+
+          try {
+            await resend.emails.send({
+              from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+              to: firstPassenger.person.email,
+              subject: `Your AreBook booking is confirmed — PNR ${pnr}`,
+              html,
+              text,
+            });
+          } catch (emailError) {
+            // Don't fail the whole webhook if email sending fails —
+            // the booking is already confirmed and paid, email is best-effort
+            console.error("Failed to send confirmation email:", emailError);
+          }
+        }
       }
     }
   }

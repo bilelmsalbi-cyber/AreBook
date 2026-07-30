@@ -77,6 +77,10 @@ function SuccessContent() {
             <p className="mt-3 text-xs text-[#5C7A96]">
               Present this code at the airport check-in counter.
             </p>
+            
+            <p className="mt-3 text-xs text-[#5C7A96]">
+              We have sent a confirmation email to your inbox.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">

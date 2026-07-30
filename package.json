@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "@lottiefiles/dotlottie-react": "^0.19.10",
+    "argon2": "^0.45.1",
     "next": "16.2.10",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "resend": "^6.18.1",
     "stripe": "^22.3.2"
   },
   "devDependencies": {
