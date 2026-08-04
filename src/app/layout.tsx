@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import UserMenu from "@/components/UserMenu";
-
+import SiteHeader from "@/components/SiteHeader";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -31,9 +30,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers>
-          <header className="flex items-center justify-end border-b border-[#DCEEFF] bg-white px-6 py-3 md:px-12">
-            <UserMenu />
-          </header>
+          <SiteHeader />
           {children}
         </Providers>
       </body>

@@ -16,20 +16,33 @@ export default function AdminLoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await signIn("admin-credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    // Get CSRF token from the admin-specific auth system
+    const csrfRes = await fetch("/api/auth/admin/csrf");
+    const { csrfToken } = await csrfRes.json();
+
+    const res = await fetch(
+      "/api/auth/admin/callback/admin-credentials",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          email,
+          password,
+          csrfToken,
+          json: "true",
+        }),
+      }
+    );
 
     setLoading(false);
 
-    if (result?.error) {
+    if (!res.ok) {
       setError("Invalid email or password.");
       return;
     }
 
     router.push("/admin/dashboard");
+    router.refresh();
   }
 
   return (

@@ -12,19 +12,25 @@ export const {
   basePath: "/api/auth/admin",
   providers: [
     Credentials({
-      name: "admin-credentials",
+      id: "admin-credentials",
+      name: "Admin Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
+        console.log("[admin-auth] attempt with email:", credentials?.email);
+
         if (!credentials?.email || !credentials?.password) {
+          console.log("[admin-auth] missing email or password");
           return null;
         }
 
         const admin = await prisma.admin.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: (credentials.email as string).toLowerCase() },
         });
+
+        console.log("[admin-auth] admin found:", admin ? admin.email : "NOT FOUND");
 
         if (!admin) {
           return null;
@@ -34,6 +40,8 @@ export const {
           admin.passwordHash,
           credentials.password as string
         );
+
+        console.log("[admin-auth] password valid:", isValid);
 
         if (!isValid) {
           return null;

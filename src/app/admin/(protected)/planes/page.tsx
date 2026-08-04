@@ -1,0 +1,19 @@
+import { prisma } from "@/lib/prisma";
+import PlanesManager from "@/components/admin/PlanesManager";
+
+export default async function AdminPlanesPage() {
+  const planes = await prisma.plane.findMany({
+    orderBy: { id: "asc" },
+  });
+
+  const serializedPlanes = planes.map((plane) => ({
+    ...plane,
+    serviceStartDate: plane.serviceStartDate.toISOString(),
+  }));
+
+  return (
+    <div className="p-8">
+      <PlanesManager initialPlanes={serializedPlanes} />
+    </div>
+  );
+}
