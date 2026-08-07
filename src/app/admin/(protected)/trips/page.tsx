@@ -20,12 +20,18 @@ export default async function AdminTripsPage() {
     plane: {
       ...trip.plane,
       serviceStartDate: trip.plane.serviceStartDate.toISOString(),
+      serviceEndDate: trip.plane.serviceEndDate
+        ? trip.plane.serviceEndDate.toISOString()
+        : null,
     },
   }));
 
   const serializedPlanes = planes.map((plane) => ({
     ...plane,
     serviceStartDate: plane.serviceStartDate.toISOString(),
+    serviceEndDate: plane.serviceEndDate
+      ? plane.serviceEndDate.toISOString()
+      : null,
   }));
 
   return (

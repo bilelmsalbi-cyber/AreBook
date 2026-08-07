@@ -7,6 +7,8 @@ type Plane = {
   id: number;
   aircraftType: string;
   nbrSeats: number;
+  // null = currently in service. A date means the plane was retired on that date.
+  serviceEndDate: string | null;
 };
 
 type Trip = {
@@ -73,6 +75,13 @@ export default function TripsManager({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // The plane originally assigned to the trip being edited, captured at the
+  // moment the edit modal opens. Kept separate from form.planId (which
+  // changes as the admin picks a new value) so a retired plane can still be
+  // shown as an option for the trip it's already attached to — otherwise the
+  // dropdown would silently drop it and risk reassigning the trip on save.
+  const [editingOriginalPlaneId, setEditingOriginalPlaneId] =
+    useState<number | null>(null);
   const [form, setForm] = useState<TripFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -83,6 +92,7 @@ export default function TripsManager({
 
   function openAddModal() {
     setEditingId(null);
+    setEditingOriginalPlaneId(null);
     setForm(emptyForm);
     setError(null);
     setModalOpen(true);
@@ -90,6 +100,7 @@ export default function TripsManager({
 
   function openEditModal(trip: Trip) {
     setEditingId(trip.id);
+    setEditingOriginalPlaneId(trip.planId);
     setForm({
       departureDateTime: toDatetimeLocal(trip.departureDateTime),
       arrivalDateTime: toDatetimeLocal(trip.arrivalDateTime),
@@ -164,6 +175,14 @@ export default function TripsManager({
   }
 
   const tripPendingDelete = trips.find((t) => t.id === confirmDeleteId);
+
+  // Plane dropdown options: only in-service planes, plus the plane already
+  // assigned to the trip being edited (if it has since been retired) so the
+  // form never silently loses the current selection.
+  const dropdownPlanes = planes.filter(
+    (plane) =>
+      plane.serviceEndDate === null || plane.id === editingOriginalPlaneId
+  );
 
   return (
     <div>
@@ -304,7 +323,8 @@ export default function TripsManager({
                   />
                 </div>
 
-                {/* Plane dropdown — populated from real DB planes */}
+                {/* Plane dropdown — in-service planes only, plus the trip's
+                    current plane when editing (see dropdownPlanes above) */}
                 <div className="col-span-2">
                   <label className="mb-1 block text-xs text-[#64748B]">
                     Plane
@@ -316,9 +336,10 @@ export default function TripsManager({
                     className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
                   >
                     <option value="">Select a plane</option>
-                    {planes.map((plane) => (
+                    {dropdownPlanes.map((plane) => (
                       <option key={plane.id} value={plane.id}>
                         #{plane.id} — {plane.aircraftType} ({plane.nbrSeats} seats)
+                        {plane.serviceEndDate !== null ? " (Out of Service)" : ""}
                       </option>
                     ))}
                   </select>

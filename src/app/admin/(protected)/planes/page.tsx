@@ -9,6 +9,9 @@ export default async function AdminPlanesPage() {
   const serializedPlanes = planes.map((plane) => ({
     ...plane,
     serviceStartDate: plane.serviceStartDate.toISOString(),
+    serviceEndDate: plane.serviceEndDate
+      ? plane.serviceEndDate.toISOString()
+      : null,
   }));
 
   return (

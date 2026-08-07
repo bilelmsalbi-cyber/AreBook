@@ -54,6 +54,7 @@ model Plane {
   maxWeight        Float
   aircraftType     String
   serviceStartDate DateTime
+  serviceEndDate   DateTime?
   maintenances     PlanMaintenance[]
   trips            Trip[]
 

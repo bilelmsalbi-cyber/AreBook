@@ -14,6 +14,8 @@ export type Plane = {
   maxWeight: number;
   aircraftType: string;
   serviceStartDate: string;
+  // null = currently in service. A date means the plane was retired on that date.
+  serviceEndDate: string | null;
 };
 
 type PlaneFormState = {
@@ -56,6 +58,11 @@ export default function PlanesManager({
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Retire / Return to service confirmation
+  const [confirmServiceId, setConfirmServiceId] = useState<number | null>(null);
+  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [serviceSaving, setServiceSaving] = useState(false);
 
   // Maintenance modal — this component only tracks WHICH plane is selected.
   // Everything else (fetching, view switching, add form) lives inside
@@ -131,7 +138,35 @@ export default function PlanesManager({
     router.refresh();
   }
 
+  async function handleServiceToggle(id: number, action: "retire" | "activate") {
+    setServiceError(null);
+    setServiceSaving(true);
+
+    const res = await fetch(`/api/admin/planes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
+
+    setServiceSaving(false);
+
+    if (!res.ok) {
+      setServiceError(data.error || "Something went wrong.");
+      return;
+    }
+
+    setConfirmServiceId(null);
+    router.refresh();
+  }
+
   const planePendingDelete = planes.find((p) => p.id === confirmDeleteId);
+  const planePendingService = planes.find((p) => p.id === confirmServiceId);
+  const serviceAction: "retire" | "activate" | null = planePendingService
+    ? planePendingService.serviceEndDate === null
+      ? "retire"
+      : "activate"
+    : null;
 
   return (
     <div>
@@ -162,13 +197,14 @@ export default function PlanesManager({
               <th className="px-4 py-3 font-medium">Seats (B/G/Total)</th>
               <th className="px-4 py-3 font-medium">Max Weight</th>
               <th className="px-4 py-3 font-medium">In Service Since</th>
+              <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
           <tbody>
             {planes.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={7} className="px-4 py-6 text-center text-[#64748B]">
                   No planes yet.
                 </td>
               </tr>
@@ -182,6 +218,11 @@ export default function PlanesManager({
                 </td>
                 <td className="px-4 py-3">{plane.maxWeight} kg</td>
                 <td className="px-4 py-3">{formatDate(plane.serviceStartDate)}</td>
+                {/* Left empty when the plane is in service (serviceEndDate is null),
+                    mirroring how the value looks in the database itself. */}
+                <td className="px-4 py-3">
+                  {plane.serviceEndDate ? formatDate(plane.serviceEndDate) : ""}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
@@ -189,6 +230,16 @@ export default function PlanesManager({
                     className="mr-3 text-xs font-semibold text-[#3B82F6] hover:underline"
                   >
                     Maintenance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmServiceId(plane.id);
+                      setServiceError(null);
+                    }}
+                    className="mr-3 text-xs font-semibold text-amber-400 hover:underline"
+                  >
+                    {plane.serviceEndDate === null ? "Retire" : "Return to Service"}
                   </button>
                   <button
                     type="button"
@@ -348,13 +399,68 @@ export default function PlanesManager({
         </div>
       )}
 
+      {/* Retire / Return to service confirmation dialog */}
+      {confirmServiceId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#1E293B] bg-[#111827] p-6">
+            <h2 className="text-base font-semibold text-white">
+              {serviceAction === "retire"
+                ? "Retire this plane?"
+                : "Return this plane to service?"}
+            </h2>
+            <p className="mt-2 text-sm text-[#94A3B8]">
+              {planePendingService && (
+                <>
+                  Are you sure you want to{" "}
+                  {serviceAction === "retire" ? "retire" : "return to service"}{" "}
+                  <span className="font-medium text-white">
+                    #{planePendingService.id} — {planePendingService.aircraftType}
+                  </span>
+                  ?
+                </>
+              )}
+            </p>
+
+            {serviceError && (
+              <p className="mt-3 text-sm text-red-400">{serviceError}</p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmServiceId(null)}
+                className="rounded-lg border border-[#1E293B] px-4 py-2 text-sm font-medium text-[#94A3B8] hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={serviceSaving}
+                onClick={() =>
+                  confirmServiceId &&
+                  serviceAction &&
+                  handleServiceToggle(confirmServiceId, serviceAction)
+                }
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                {serviceSaving
+                  ? "Saving..."
+                  : serviceAction === "retire"
+                  ? "Retire"
+                  : "Return to Service"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Maintenance modal — delegated entirely to its own component */}
       {maintenancePlane && (
-  <MaintenanceModal
-    plane={maintenancePlane}
-    onClose={() => setMaintenancePlane(null)}
-  />
-)}
+        <MaintenanceModal
+          plane={maintenancePlane}
+          onClose={() => setMaintenancePlane(null)}
+        />
+      )}
     </div>
   );
 }
