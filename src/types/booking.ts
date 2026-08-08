@@ -1,5 +1,6 @@
 export type BookingResult = {
   id: number;
+  pnr: string | null;
   status: "PENDING" | "CONFIRMED" | "CANCELLED";
   bookingDate: string;
   seatClass: "BUSINESS" | "GUEST";

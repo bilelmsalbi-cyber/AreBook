@@ -36,6 +36,7 @@ function paymentLabel(booking: BookingResult) {
 
 const emptyFilters = {
   id: "",
+  pnr: "",
   name: "",
   status: "",
   tripId: "",
@@ -68,6 +69,7 @@ export default function BookingsManager({
 
     const params = new URLSearchParams();
     if (filters.id.trim()) params.set("id", filters.id.trim());
+    if (filters.pnr.trim()) params.set("pnr", filters.pnr.trim());
     if (filters.name.trim()) params.set("name", filters.name.trim());
     if (filters.status) params.set("status", filters.status);
     if (filters.tripId) params.set("tripId", filters.tripId);
@@ -115,7 +117,7 @@ export default function BookingsManager({
       {/* Combined filter bar */}
       <form
         onSubmit={handleSearch}
-        className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-[#1E293B] bg-[#111827] p-4 md:grid-cols-5"
+        className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-[#1E293B] bg-[#111827] p-4 md:grid-cols-6"
       >
         <div>
           <label className="mb-1 block text-xs text-[#64748B]">
@@ -126,6 +128,17 @@ export default function BookingsManager({
             min="1"
             value={filters.id}
             onChange={(e) => updateFilter("id", e.target.value)}
+            className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">PNR</label>
+          <input
+            type="text"
+            placeholder="e.g. AB12CD"
+            value={filters.pnr}
+            onChange={(e) => updateFilter("pnr", e.target.value)}
             className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
           />
         </div>
@@ -188,7 +201,7 @@ export default function BookingsManager({
           />
         </div>
 
-        <div className="col-span-2 flex items-end gap-3 md:col-span-5">
+        <div className="col-span-2 flex items-end gap-3 md:col-span-6">
           <button
             type="submit"
             disabled={loading}
@@ -214,6 +227,7 @@ export default function BookingsManager({
           <thead className="bg-[#111827] text-[#64748B]">
             <tr>
               <th className="px-4 py-3 font-medium">ID</th>
+              <th className="px-4 py-3 font-medium">PNR</th>
               <th className="px-4 py-3 font-medium">Passenger(s)</th>
               <th className="px-4 py-3 font-medium">Trip</th>
               <th className="px-4 py-3 font-medium">Class</th>
@@ -226,14 +240,14 @@ export default function BookingsManager({
           <tbody>
             {!hasSearched && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={9} className="px-4 py-6 text-center text-[#64748B]">
                   Enter at least one filter and search.
                 </td>
               </tr>
             )}
             {hasSearched && !loading && results.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={9} className="px-4 py-6 text-center text-[#64748B]">
                   No bookings match this search.
                 </td>
               </tr>
@@ -244,6 +258,7 @@ export default function BookingsManager({
                 className="border-t border-[#1E293B] text-[#CBD5E1]"
               >
                 <td className="px-4 py-3">#{booking.id}</td>
+                <td className="px-4 py-3">{booking.pnr || "—"}</td>
                 <td className="px-4 py-3">{passengerNames(booking)}</td>
                 <td className="px-4 py-3">
                   {booking.trip.departingPlace} → {booking.trip.destination}

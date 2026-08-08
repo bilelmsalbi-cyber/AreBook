@@ -43,6 +43,12 @@ model Admin {
   role         AdminRole
   phone        String
 
+  // Audit trail: which admin created this account.
+  // Nullable because the very first (seed) admin was created outside the app.
+  createdById   Int?
+  createdBy     Admin?    @relation("AdminCreatedBy", fields: [createdById], references: [id])
+  createdAdmins Admin[]   @relation("AdminCreatedBy")
+
   @@map("admins")
 }
 

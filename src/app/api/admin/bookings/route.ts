@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const idParam = searchParams.get("id");
+  const pnrParam = searchParams.get("pnr");
   const nameParam = searchParams.get("name");
   const statusParam = searchParams.get("status");
   const tripIdParam = searchParams.get("tripId");
@@ -50,6 +51,11 @@ export async function GET(request: NextRequest) {
       );
     }
     conditions.push({ id });
+  }
+
+  if (pnrParam) {
+    // PNR is unique per booking — exact match, not a partial search.
+    conditions.push({ pnr: pnrParam.trim() });
   }
 
   if (nameParam) {
