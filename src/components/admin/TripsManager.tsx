@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+const PAGE_SIZE = 20;
 
 type Plane = {
   id: number;
@@ -35,6 +37,12 @@ type TripFormState = {
   destination: string;
 };
 
+type TripSearch = {
+  from: string;
+  to: string;
+  date: string;
+};
+
 const emptyForm: TripFormState = {
   departureDateTime: "",
   arrivalDateTime: "",
@@ -45,14 +53,10 @@ const emptyForm: TripFormState = {
   destination: "",
 };
 
-// Convert an ISO string to the format <input type="datetime-local"> expects
 function toDatetimeLocal(iso: string) {
   return iso.slice(0, 16);
 }
 
-// Deterministic formatter — avoids server/client locale mismatches
-// (using toLocaleString() causes hydration errors because server and
-// browser can format dates differently)
 function formatDateTime(iso: string) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -63,23 +67,47 @@ function formatDateTime(iso: string) {
 
 export default function TripsManager({
   initialTrips,
+  initialHasMore,
   planes,
+  role,
+  initialSearch,
 }: {
   initialTrips: Trip[];
+  initialHasMore: boolean;
   planes: Plane[];
+  role: "ADMIN" | "EMPLOYEE";
+  initialSearch: TripSearch;
 }) {
   const router = useRouter();
-  // No local copy needed — router.refresh() re-renders this component
-  // with fresh initialTrips directly from the server after every change.
-  const trips = initialTrips;
+  const canManage = role === "ADMIN";
+
+  // Local accumulator for "Load More" — starts from the server-rendered
+  // first batch, grows as more batches are fetched client-side. Whenever
+  // the server sends a fresh batch (new search submitted, or a mutation
+  // triggers router.refresh()), this resets to match — see the effect
+  // below. Note: this means any rows loaded via "Load More" are lost
+  // after creating/editing/deleting a trip, since that also triggers a
+  // fresh first-batch fetch. Accepted trade-off for simplicity.
+  const [trips, setTrips] = useState(initialTrips);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTrips(initialTrips);
+    setHasMore(initialHasMore);
+  }, [initialTrips, initialHasMore]);
+
+  // Search form inputs — initialized from the URL-driven search that
+  // produced the current results, so the fields stay populated after
+  // navigation/refresh.
+  const [fromInput, setFromInput] = useState(initialSearch.from);
+  const [toInput, setToInput] = useState(initialSearch.to);
+  const [dateInput, setDateInput] = useState(initialSearch.date);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  // The plane originally assigned to the trip being edited, captured at the
-  // moment the edit modal opens. Kept separate from form.planId (which
-  // changes as the admin picks a new value) so a retired plane can still be
-  // shown as an option for the trip it's already attached to — otherwise the
-  // dropdown would silently drop it and risk reassigning the trip on save.
   const [editingOriginalPlaneId, setEditingOriginalPlaneId] =
     useState<number | null>(null);
   const [form, setForm] = useState<TripFormState>(emptyForm);
@@ -153,7 +181,7 @@ export default function TripsManager({
     }
 
     setModalOpen(false);
-    router.refresh(); // re-fetch server data so the table reflects the change
+    router.refresh();
   }
 
   async function handleDelete(id: number) {
@@ -171,14 +199,71 @@ export default function TripsManager({
     }
 
     setConfirmDeleteId(null);
-    router.refresh(); // re-fetch server data so the table reflects the deletion
+    router.refresh();
+  }
+
+  // Route filter (from + to) requires both fields together — a single
+  // filled field alone is ambiguous and blocked here before it ever
+  // reaches the URL/API.
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if ((fromInput && !toInput) || (!fromInput && toInput)) {
+      setSearchError("Enter both From and To to search by route.");
+      return;
+    }
+
+    setSearchError(null);
+
+    const qs = new URLSearchParams();
+    if (fromInput && toInput) {
+      qs.set("from", fromInput);
+      qs.set("to", toInput);
+    }
+    if (dateInput) qs.set("date", dateInput);
+
+    router.push(`/admin/trips${qs.toString() ? `?${qs.toString()}` : ""}`);
+  }
+
+  function handleClearSearch() {
+    setFromInput("");
+    setToInput("");
+    setDateInput("");
+    setSearchError(null);
+    router.push("/admin/trips");
+  }
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    setLoadMoreError(null);
+
+    const qs = new URLSearchParams();
+    if (initialSearch.from && initialSearch.to) {
+      qs.set("from", initialSearch.from);
+      qs.set("to", initialSearch.to);
+    }
+    if (initialSearch.date) qs.set("date", initialSearch.date);
+    qs.set("skip", String(trips.length));
+    qs.set("take", String(PAGE_SIZE));
+
+    const res = await fetch(`/api/admin/trips?${qs.toString()}`);
+    const data = await res.json();
+
+    setLoadingMore(false);
+
+    if (!res.ok) {
+      setLoadMoreError(data.error || "Failed to load more trips.");
+      return;
+    }
+
+    setTrips((prev) => [...prev, ...data.trips]);
+    setHasMore(data.hasMore);
   }
 
   const tripPendingDelete = trips.find((t) => t.id === confirmDeleteId);
+  const hasActiveSearch =
+    Boolean(initialSearch.from && initialSearch.to) || Boolean(initialSearch.date);
 
-  // Plane dropdown options: only in-service planes, plus the plane already
-  // assigned to the trip being edited (if it has since been retired) so the
-  // form never silently loses the current selection.
   const dropdownPlanes = planes.filter(
     (plane) =>
       plane.serviceEndDate === null || plane.id === editingOriginalPlaneId
@@ -194,14 +279,70 @@ export default function TripsManager({
             Manage all scheduled flights.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="rounded-lg bg-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
-        >
-          + Add Trip
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="rounded-lg bg-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
+          >
+            + Add Trip
+          </button>
+        )}
       </div>
+
+      {/* Search bar — From/To must be filled together, Date is independent */}
+      <form
+        onSubmit={handleSearchSubmit}
+        className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-[#1E293B] bg-[#111827] p-4"
+      >
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">From</label>
+          <input
+            type="text"
+            placeholder="Departure city"
+            value={fromInput}
+            onChange={(e) => setFromInput(e.target.value)}
+            className="w-40 rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-sm text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">To</label>
+          <input
+            type="text"
+            placeholder="Destination city"
+            value={toInput}
+            onChange={(e) => setToInput(e.target.value)}
+            className="w-40 rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-sm text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">Date</label>
+          <input
+            type="date"
+            value={dateInput}
+            onChange={(e) => setDateInput(e.target.value)}
+            className="rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-sm text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+        <button
+          type="submit"
+          className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB]"
+        >
+          Search
+        </button>
+        {hasActiveSearch && (
+          <button
+            type="button"
+            onClick={handleClearSearch}
+            className="text-xs font-semibold text-[#64748B] hover:text-white"
+          >
+            Clear filters
+          </button>
+        )}
+        {searchError && (
+          <p className="w-full text-sm text-red-400">{searchError}</p>
+        )}
+      </form>
 
       {/* Table */}
       <div className="mt-6 overflow-hidden rounded-xl border border-[#1E293B]">
@@ -220,7 +361,7 @@ export default function TripsManager({
             {trips.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-[#64748B]">
-                  No trips yet.
+                  {hasActiveSearch ? "No trips match your search." : "No trips yet."}
                 </td>
               </tr>
             )}
@@ -240,29 +381,50 @@ export default function TripsManager({
                   {trip.availableSeatsBusiness} / {trip.availableSeatsGuest}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(trip)}
-                    className="mr-3 text-xs font-semibold text-[#3B82F6] hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmDeleteId(trip.id);
-                      setDeleteError(null);
-                    }}
-                    className="text-xs font-semibold text-red-400 hover:underline"
-                  >
-                    Delete
-                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(trip)}
+                        className="mr-3 text-xs font-semibold text-[#3B82F6] hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmDeleteId(trip.id);
+                          setDeleteError(null);
+                        }}
+                        className="text-xs font-semibold text-red-400 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Load More */}
+      {hasMore && (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="rounded-lg border border-[#1E293B] px-4 py-2 text-sm font-semibold text-[#94A3B8] hover:text-white disabled:opacity-60"
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+          {loadMoreError && (
+            <p className="text-sm text-red-400">{loadMoreError}</p>
+          )}
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {modalOpen && (
@@ -323,8 +485,6 @@ export default function TripsManager({
                   />
                 </div>
 
-                {/* Plane dropdown — in-service planes only, plus the trip's
-                    current plane when editing (see dropdownPlanes above) */}
                 <div className="col-span-2">
                   <label className="mb-1 block text-xs text-[#64748B]">
                     Plane

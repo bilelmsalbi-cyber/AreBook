@@ -13,11 +13,14 @@ export default function MaintenanceHistoryView({
   maintenances,
   loading,
   error,
+  canAdd,
   onAddClick,
 }: {
   maintenances: Maintenance[];
   loading: boolean;
   error: string | null;
+  // Employees can view this list but not add to it.
+  canAdd: boolean;
   onAddClick: () => void;
 }) {
   return (
@@ -26,13 +29,15 @@ export default function MaintenanceHistoryView({
         <h3 className="text-sm font-medium text-[#94A3B8]">
           Maintenance History
         </h3>
-        <button
-          type="button"
-          onClick={onAddClick}
-          className="rounded-lg bg-[#3B82F6] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
-        >
-          + Add Record
-        </button>
+        {canAdd && (
+          <button
+            type="button"
+            onClick={onAddClick}
+            className="rounded-lg bg-[#3B82F6] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
+          >
+            + Add Record
+          </button>
+        )}
       </div>
 
       <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">

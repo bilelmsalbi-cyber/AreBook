@@ -55,7 +55,16 @@ export default function AdminSidebar({
 
           <div className="border-t border-[#1E293B] px-5 py-4">
             <p className="truncate text-sm font-medium text-white">{name}</p>
-            <p className="text-xs text-[#64748B]">{role}</p>
+            {/* Visual indicator for read-only Employee sessions. Reuses the
+                same amber accent already used for the Retire action on
+                Fleet, instead of introducing a new color to the palette. */}
+            {role === "EMPLOYEE" ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                Employee Mode
+              </span>
+            ) : (
+              <p className="text-xs text-[#64748B]">{role}</p>
+            )}
             <form action={signOutAction}>
               <button
                 type="submit"

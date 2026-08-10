@@ -44,24 +44,35 @@ export default function Home() {
   const totalPassengers = infants + children + adults;
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
+    <main className="relative min-h-screen text-[#16324F]">
+      {/* ==================== Full-bleed background photo ====================
+          Covers the hero strip AND the area behind the white search card. */}
+      <div
+        className="fixed inset-0 -z-10 bg-cover bg-center"
+        style={{ backgroundImage: "url('/plane.jpg')" }}
+      />
+      {/* Overlay: dark brand-blue wash up top for the headline, softening down
+          to a hazy white toward the bottom so the floating white card still
+          feels grounded on the same background. */}
+      <div className="fixed inset-0 -z-10 bg-linear-to-b from-[#0B1E3D]/90 via-[#1D4ED8]/70 to-[#EAF3FF]/95" />
+
       {/* ==================== Hero ==================== */}
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-14 md:px-12 md:py-20">
-        <div className="mx-auto max-w-5xl">
+      <section className="relative px-6 pb-24 pt-14 text-center md:px-12 md:pt-24">
+        <div className="mx-auto max-w-2xl">
           <p className="mb-3 font-mono text-xs tracking-[0.3em] text-[#DCEEFF]">
-            AREBOOK — DEPARTURES
+            AREBOOK · WORLDWIDE FLIGHTS
           </p>
-          <h1 className="text-4xl font-bold tracking-tight text-white md:text-6xl">
-            Where do you want to fly?
+          <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-sm md:text-6xl">
+            Your Next Journey Starts Here
           </h1>
-          <p className="mt-3 max-w-xl text-[#DCEEFF]">
-            Find your flight, choose your class, and book with ease.
+          <p className="mx-auto mt-3 max-w-xl text-[#DCEEFF]">
+            Compare fares, pick your seat, and book in minutes — wherever the sky takes you.
           </p>
         </div>
       </section>
 
       {/* ==================== Search Form ==================== */}
-      <section className="px-6 py-8 md:px-12">
+      <section className="relative px-6 pb-16 md:px-12">
         <div className="mx-auto -mt-10 max-w-5xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)] md:p-8">
           <fieldset className="mb-6 flex gap-6">
             <label className="flex cursor-pointer items-center gap-2">

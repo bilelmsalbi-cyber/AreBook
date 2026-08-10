@@ -1,30 +1,53 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/auth-admin";
+import { requireAdminRole } from "@/lib/rbac";
+import { buildTripWhere, ADMIN_PAGE_SIZE } from "@/lib/adminFilters";
 
-// GET all trips — used by the trips page, but we already fetch this
-// server-side in page.tsx, so this endpoint is mainly for future use
-// (e.g. client-side refresh after create/edit)
-export async function GET() {
+// GET trips — read-only, available to both ADMIN and EMPLOYEE.
+// Supports search (from/to/date) and pagination (skip/take). Used by
+// TripsManager's "Load More" button to fetch subsequent batches with
+// the same filters as the current search.
+export async function GET(request: Request) {
   const session = await adminAuth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const where = buildTripWhere({
+    from: searchParams.get("from") ?? undefined,
+    to: searchParams.get("to") ?? undefined,
+    date: searchParams.get("date") ?? undefined,
+  });
+  const skip = Number(searchParams.get("skip") ?? 0);
+  const take = Number(searchParams.get("take") ?? ADMIN_PAGE_SIZE);
+
+  // Fetch one extra record to detect whether more results exist beyond
+  // this batch, without a separate count() query.
   const trips = await prisma.trip.findMany({
+    where,
     include: { plane: true },
     orderBy: { departureDateTime: "asc" },
+    skip,
+    take: take + 1,
   });
 
-  return NextResponse.json({ trips });
+  const hasMore = trips.length > take;
+  const page = trips.slice(0, take);
+
+  return NextResponse.json({ trips: page, hasMore });
 }
 
-// CREATE a new trip
+// CREATE a new trip — Admin only
 export async function POST(request: Request) {
   const session = await adminAuth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const forbidden = requireAdminRole(session.user.role);
+  if (forbidden) return forbidden;
 
   try {
     const body = await request.json();
@@ -70,7 +93,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Seats always come from the plane's total capacity, never typed manually
     const plane = await prisma.plane.findUnique({
       where: { id: Number(planId) },
     });

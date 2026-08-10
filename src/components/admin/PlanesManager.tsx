@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MaintenanceModal from "@/components/admin/maintenance/MaintenanceModal";
 
-// Exported so MaintenanceModal (and any future consumer) uses this
-// as the single source of truth for the Plane shape.
+const PAGE_SIZE = 20;
+
 export type Plane = {
   id: number;
   nbrSeats: number;
@@ -14,7 +14,6 @@ export type Plane = {
   maxWeight: number;
   aircraftType: string;
   serviceStartDate: string;
-  // null = currently in service. A date means the plane was retired on that date.
   serviceEndDate: string | null;
 };
 
@@ -24,6 +23,12 @@ type PlaneFormState = {
   nbrGuestSeats: string;
   maxWeight: string;
   serviceStartDate: string;
+};
+
+type PlaneSearch = {
+  name: string;
+  id: string;
+  showRetired: boolean;
 };
 
 const emptyForm: PlaneFormState = {
@@ -42,31 +47,47 @@ function formatDate(iso: string) {
 
 export default function PlanesManager({
   initialPlanes,
+  initialHasMore,
+  role,
+  initialSearch,
 }: {
   initialPlanes: Plane[];
+  initialHasMore: boolean;
+  role: "ADMIN" | "EMPLOYEE";
+  initialSearch: PlaneSearch;
 }) {
   const router = useRouter();
-  const planes = initialPlanes;
+  const canManage = role === "ADMIN";
 
-  // Add Plane modal
+  // Same accumulator pattern as TripsManager — see the comment there
+  // for the trade-off around mutations collapsing "Load More" batches.
+  const [planes, setPlanes] = useState(initialPlanes);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPlanes(initialPlanes);
+    setHasMore(initialHasMore);
+  }, [initialPlanes, initialHasMore]);
+
+  const [nameInput, setNameInput] = useState(initialSearch.name);
+  const [idInput, setIdInput] = useState(initialSearch.id);
+  const [showRetiredInput, setShowRetiredInput] = useState(initialSearch.showRetired);
+
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [form, setForm] = useState<PlaneFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Retire / Return to service confirmation
   const [confirmServiceId, setConfirmServiceId] = useState<number | null>(null);
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [serviceSaving, setServiceSaving] = useState(false);
 
-  // Maintenance modal — this component only tracks WHICH plane is selected.
-  // Everything else (fetching, view switching, add form) lives inside
-  // MaintenanceModal and its children.
   const [maintenancePlane, setMaintenancePlane] = useState<Plane | null>(null);
 
   function openAddModal() {
@@ -160,6 +181,53 @@ export default function PlanesManager({
     router.refresh();
   }
 
+  function buildSearchQs(base: PlaneSearch) {
+    const qs = new URLSearchParams();
+    if (base.name) qs.set("name", base.name);
+    if (base.id) qs.set("id", base.id);
+    if (base.showRetired) qs.set("showRetired", "1");
+    return qs;
+  }
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const qs = buildSearchQs({
+      name: nameInput,
+      id: idInput,
+      showRetired: showRetiredInput,
+    });
+    router.push(`/admin/planes${qs.toString() ? `?${qs.toString()}` : ""}`);
+  }
+
+  function handleClearSearch() {
+    setNameInput("");
+    setIdInput("");
+    setShowRetiredInput(false);
+    router.push("/admin/planes");
+  }
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    setLoadMoreError(null);
+
+    const qs = buildSearchQs(initialSearch);
+    qs.set("skip", String(planes.length));
+    qs.set("take", String(PAGE_SIZE));
+
+    const res = await fetch(`/api/admin/planes?${qs.toString()}`);
+    const data = await res.json();
+
+    setLoadingMore(false);
+
+    if (!res.ok) {
+      setLoadMoreError(data.error || "Failed to load more planes.");
+      return;
+    }
+
+    setPlanes((prev) => [...prev, ...data.planes]);
+    setHasMore(data.hasMore);
+  }
+
   const planePendingDelete = planes.find((p) => p.id === confirmDeleteId);
   const planePendingService = planes.find((p) => p.id === confirmServiceId);
   const serviceAction: "retire" | "activate" | null = planePendingService
@@ -167,6 +235,9 @@ export default function PlanesManager({
       ? "retire"
       : "activate"
     : null;
+  const hasActiveSearch = Boolean(
+    initialSearch.name || initialSearch.id || initialSearch.showRetired
+  );
 
   return (
     <div>
@@ -178,14 +249,67 @@ export default function PlanesManager({
             Manage all planes in the fleet.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="rounded-lg bg-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
-        >
-          + Add Plane
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="rounded-lg bg-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
+          >
+            + Add Plane
+          </button>
+        )}
       </div>
+
+      {/* Search bar — Name and ID are independent, each optional on its own */}
+      <form
+        onSubmit={handleSearchSubmit}
+        className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-[#1E293B] bg-[#111827] p-4"
+      >
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">Name</label>
+          <input
+            type="text"
+            placeholder="e.g. Airbus A320"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            className="w-48 rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-sm text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[#64748B]">ID</label>
+          <input
+            type="text"
+            placeholder="e.g. 14"
+            value={idInput}
+            onChange={(e) => setIdInput(e.target.value)}
+            className="w-24 rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-sm text-white outline-none focus:border-[#3B82F6]"
+          />
+        </div>
+        <label className="flex items-center gap-2 pb-2 text-sm text-[#94A3B8]">
+          <input
+            type="checkbox"
+            checked={showRetiredInput}
+            onChange={(e) => setShowRetiredInput(e.target.checked)}
+            className="h-4 w-4 rounded border-[#1E293B] bg-[#0B0F19]"
+          />
+          Show retired planes
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB]"
+        >
+          Search
+        </button>
+        {hasActiveSearch && (
+          <button
+            type="button"
+            onClick={handleClearSearch}
+            className="text-xs font-semibold text-[#64748B] hover:text-white"
+          >
+            Clear filters
+          </button>
+        )}
+      </form>
 
       {/* Table */}
       <div className="mt-6 overflow-hidden rounded-xl border border-[#1E293B]">
@@ -197,7 +321,7 @@ export default function PlanesManager({
               <th className="px-4 py-3 font-medium">Seats (B/G/Total)</th>
               <th className="px-4 py-3 font-medium">Max Weight</th>
               <th className="px-4 py-3 font-medium">In Service Since</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Out of Service Since</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
           </thead>
@@ -205,7 +329,7 @@ export default function PlanesManager({
             {planes.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-[#64748B]">
-                  No planes yet.
+                  {hasActiveSearch ? "No planes match your search." : "No planes yet."}
                 </td>
               </tr>
             )}
@@ -231,32 +355,53 @@ export default function PlanesManager({
                   >
                     Maintenance
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmServiceId(plane.id);
-                      setServiceError(null);
-                    }}
-                    className="mr-3 text-xs font-semibold text-amber-400 hover:underline"
-                  >
-                    {plane.serviceEndDate === null ? "Retire" : "Return to Service"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmDeleteId(plane.id);
-                      setDeleteError(null);
-                    }}
-                    className="text-xs font-semibold text-red-400 hover:underline"
-                  >
-                    Delete
-                  </button>
+                  {canManage && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmServiceId(plane.id);
+                          setServiceError(null);
+                        }}
+                        className="mr-3 text-xs font-semibold text-amber-400 hover:underline"
+                      >
+                        {plane.serviceEndDate === null ? "Retire" : "Return to Service"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmDeleteId(plane.id);
+                          setDeleteError(null);
+                        }}
+                        className="text-xs font-semibold text-red-400 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Load More */}
+      {hasMore && (
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="rounded-lg border border-[#1E293B] px-4 py-2 text-sm font-semibold text-[#94A3B8] hover:text-white disabled:opacity-60"
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+          {loadMoreError && (
+            <p className="text-sm text-red-400">{loadMoreError}</p>
+          )}
+        </div>
+      )}
 
       {/* Add Plane Modal */}
       {addModalOpen && (
@@ -458,6 +603,7 @@ export default function PlanesManager({
       {maintenancePlane && (
         <MaintenanceModal
           plane={maintenancePlane}
+          canManage={canManage}
           onClose={() => setMaintenancePlane(null)}
         />
       )}

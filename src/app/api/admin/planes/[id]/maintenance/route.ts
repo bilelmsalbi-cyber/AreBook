@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/auth-admin";
+import { requireAdminRole } from "@/lib/rbac";
 
+// GET maintenance history for a plane — read-only, available to both
+// ADMIN and EMPLOYEE
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -22,6 +25,7 @@ export async function GET(
   return NextResponse.json({ maintenances });
 }
 
+// CREATE a maintenance record — Admin only
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -30,6 +34,9 @@ export async function POST(
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const forbidden = requireAdminRole(session.user.role);
+  if (forbidden) return forbidden;
 
   try {
     const { id } = await params;

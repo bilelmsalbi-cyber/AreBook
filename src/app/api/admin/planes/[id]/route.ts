@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/auth-admin";
+import { requireAdminRole } from "@/lib/rbac";
 
+// DELETE a plane — Admin only
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -11,11 +13,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const forbidden = requireAdminRole(session.user.role);
+  if (forbidden) return forbidden;
+
   try {
     const { id } = await params;
     const planeId = Number(id);
 
-    // Referential safety: block deletion if trips use this plane
     const linkedTripsCount = await prisma.trip.count({
       where: { planId: planeId },
     });
@@ -29,7 +33,6 @@ export async function DELETE(
       );
     }
 
-    // Referential safety: block deletion if maintenance records use this plane
     const linkedMaintenanceCount = await prisma.planMaintenance.count({
       where: { planId: planeId },
     });
@@ -55,7 +58,7 @@ export async function DELETE(
   }
 }
 
-// Toggles a plane's service status.
+// Toggles a plane's service status — Admin only.
 // action "retire": takes the plane out of service. Blocked if the plane
 // still has future trips scheduled (a plane cannot be retired while it's
 // committed to upcoming flights).
@@ -68,6 +71,9 @@ export async function PATCH(
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const forbidden = requireAdminRole(session.user.role);
+  if (forbidden) return forbidden;
 
   try {
     const { id } = await params;

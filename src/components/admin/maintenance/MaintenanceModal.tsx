@@ -15,9 +15,14 @@ type MaintenanceView = "history" | "add";
 // no manual state reset is ever needed here.
 export default function MaintenanceModal({
   plane,
+  canManage,
   onClose,
 }: {
   plane: Plane;
+  // Employees can view maintenance history but cannot add records —
+  // passed down from PlanesManager (server-enforced separately via
+  // requireAdminRole on the POST route).
+  canManage: boolean;
   onClose: () => void;
 }) {
   const [view, setView] = useState<MaintenanceView>("history");
@@ -77,6 +82,7 @@ export default function MaintenanceModal({
               maintenances={maintenances}
               loading={loading}
               error={fetchError}
+              canAdd={canManage}
               onAddClick={() => setView("add")}
             />
           ) : (

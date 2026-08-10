@@ -1,10 +1,27 @@
 import { prisma } from "@/lib/prisma";
+import { adminAuth } from "@/lib/auth-admin";
+
+// Deterministic formatter — avoids server/client locale mismatches
+// (the previous booking.bookingDate.toLocaleDateString() call was a
+// known hydration-error source elsewhere in the project; applying the
+// same fix pattern used across TripsManager/PlanesManager here).
+function formatDate(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+}
 
 export default async function AdminDashboardPage() {
+  const session = await adminAuth();
+  const role = session?.user?.role ?? "EMPLOYEE";
+  const isAdmin = role === "ADMIN";
+
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // Revenue is financial data — only queried/shown for full Admins.
+  // Employees see operational counts only.
   const [bookingsToday, activeTrips, monthlyPayments, recentBookings] =
     await Promise.all([
       prisma.booking.count({
@@ -13,13 +30,15 @@ export default async function AdminDashboardPage() {
       prisma.trip.count({
         where: { departureDateTime: { gte: now } },
       }),
-      prisma.payment.findMany({
-        where: {
-          status: "PAID",
-          paymentDate: { gte: startOfMonth },
-        },
-        select: { amount: true },
-      }),
+      isAdmin
+        ? prisma.payment.findMany({
+            where: {
+              status: "PAID",
+              paymentDate: { gte: startOfMonth },
+            },
+            select: { amount: true },
+          })
+        : Promise.resolve([]),
       prisma.booking.findMany({
         take: 5,
         orderBy: { bookingDate: "desc" },
@@ -34,7 +53,9 @@ export default async function AdminDashboardPage() {
   const stats = [
     { label: "Bookings today", value: bookingsToday },
     { label: "Upcoming trips", value: activeTrips },
-    { label: "Revenue this month", value: `${monthlyRevenue.toFixed(2)} TND` },
+    ...(isAdmin
+      ? [{ label: "Revenue this month", value: `${monthlyRevenue.toFixed(2)} TND` }]
+      : []),
   ];
 
   return (
@@ -44,7 +65,11 @@ export default async function AdminDashboardPage() {
         Quick snapshot of current activity.
       </p>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div
+        className={`mt-6 grid grid-cols-1 gap-4 ${
+          isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+        }`}
+      >
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -94,7 +119,7 @@ export default async function AdminDashboardPage() {
                   </td>
                   <td className="px-4 py-3">{booking.status}</td>
                   <td className="px-4 py-3">
-                    {booking.bookingDate.toLocaleDateString()}
+                    {formatDate(booking.bookingDate.toISOString())}
                   </td>
                 </tr>
               ))}
