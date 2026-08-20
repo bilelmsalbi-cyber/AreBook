@@ -1,13 +1,3 @@
-// Goes in: D:\AreBook\src\lib\rateLimit.ts
-//
-// A simple per-IP rate limiter, stored in memory.
-// Honest limitation: this resets if the server restarts, and doesn't work
-// across multiple server instances (real production apps on Vercel would
-// use a shared store like Upstash Redis for this). For a single-instance
-// app at this stage, this is a legitimate, commonly used baseline —
-// it's the same idea (fixed time window + request counter), just without
-// an external database behind it yet.
-
 type Bucket = {
   count: number;
   windowStart: number;

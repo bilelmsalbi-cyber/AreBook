@@ -1,6 +1,3 @@
-// Goes in: D:\AreBook\src\app\passengers\[bookingId]\page.tsx
-// (replaces the whole file)
-
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -12,6 +9,18 @@ import {
   passengersStorageKey,
 } from "@/types/passenger";
 
+type TripSummary = {
+  departureDateTime: string;
+  departingPlace: string;
+  destination: string;
+};
+
+type BookingSummary = {
+  id: number;
+  trip: TripSummary;
+  linkedBooking: { trip: TripSummary } | null;
+};
+
 function PassengersContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -21,6 +30,22 @@ function PassengersContent() {
   const adults = parseInt(searchParams.get("adults") || "1", 10);
   const children = parseInt(searchParams.get("children") || "0", 10);
   const seatsNeeded = adults + children;
+
+  // Round-trip summary (outbound + return), shown at the top of the page
+  // so the traveler knows the passenger info they enter covers both legs.
+  const [booking, setBooking] = useState<BookingSummary | null>(null);
+
+  useEffect(() => {
+    async function fetchBooking() {
+      const res = await fetch(`/api/bookings/${bookingId}`);
+      if (!res.ok) return; // non-fatal: the form still works without the summary
+      const data = await res.json();
+      setBooking(data);
+    }
+    fetchBooking();
+  }, [bookingId]);
+
+  const isRoundTrip = !!booking?.linkedBooking;
 
   // Load existing data from sessionStorage if the user is coming back
   // from the Services page, otherwise start with empty passengers.
@@ -84,6 +109,36 @@ function PassengersContent() {
           <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
             Passenger Information — {seatsNeeded} passenger(s)
           </h1>
+
+          {isRoundTrip && booking && (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Outbound</p>
+                <p className="mt-1 text-sm text-white">
+                  {booking.trip.departingPlace} &rarr; {booking.trip.destination}
+                </p>
+                <p className="text-xs text-[#DCEEFF]">
+                  {new Date(booking.trip.departureDateTime).toLocaleString("en-GB")}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Return</p>
+                <p className="mt-1 text-sm text-white">
+                  {booking.linkedBooking!.trip.departingPlace} &rarr;{" "}
+                  {booking.linkedBooking!.trip.destination}
+                </p>
+                <p className="text-xs text-[#DCEEFF]">
+                  {new Date(booking.linkedBooking!.trip.departureDateTime).toLocaleString("en-GB")}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isRoundTrip && (
+            <p className="mt-3 text-xs text-[#DCEEFF]">
+              Passenger details below apply to both the outbound and return flights.
+            </p>
+          )}
         </div>
       </section>
 
@@ -232,6 +287,7 @@ function PassengersContent() {
                 <p className="mt-4 text-xs text-[#5C7A96]">
                   {passenger.services.length} service(s) added —{" "}
                   {passenger.services.reduce((sum, s) => sum + s.price, 0)} TND
+                  {isRoundTrip && " (applied to both flights)"}
                 </p>
               )}
 

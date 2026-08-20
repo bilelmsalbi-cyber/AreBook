@@ -21,6 +21,7 @@ export default async function AdminLayout({
     { href: "/admin/trips", label: "Trips", icon: "✈️" },
     { href: "/admin/planes", label: "Fleet", icon: "🛩️" },
     { href: "/admin/bookings", label: "Bookings", icon: "🧾" },
+    { href: "/admin/pricing", label: "Pricing & Policies", icon: "💲" },
     ...(role === "ADMIN"
       ? [{ href: "/admin/staff", label: "Staff Accounts", icon: "👥" }]
       : []),

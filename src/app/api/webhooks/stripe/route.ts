@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    // Always the leg the checkout session was created from (see pay/route.ts).
     const bookingId = parseInt(session.metadata?.bookingId || "", 10);
 
     if (!isNaN(bookingId)) {
@@ -52,25 +53,46 @@ export async function POST(request: NextRequest) {
           trip: { include: { plane: true } },
           passengers: { include: { person: true } },
           payment: true,
+          linkedBooking: {
+            include: { trip: { include: { plane: true } } },
+          },
         },
       });
 
-      // Idempotency guard: only act once, even if Stripe retries the webhook
-      if (booking && booking.status !== "CONFIRMED") {
+      // Idempotency guard: only act once, even if Stripe retries the webhook.
+      // booking.paymentId must exist — checkout/route.ts always sets it
+      // before a Stripe session can be created.
+      if (booking && booking.status !== "CONFIRMED" && booking.paymentId) {
         const pnr = await generateUniquePnr();
 
-        await prisma.$transaction([
+        const writes = [
           prisma.booking.update({
             where: { id: bookingId },
             data: { status: "CONFIRMED", pnr },
           }),
+          // Booking → Payment now, so we update by the Payment's own id,
+          // not by a bookingId field (Payment no longer has one).
           prisma.payment.update({
-            where: { bookingId },
+            where: { id: booking.paymentId },
             data: { status: "PAID", paymentDate: new Date() },
           }),
-        ]);
+        ];
 
-        // Send confirmation email to the first passenger
+        // Round-trip: confirm the linked leg too. It shares the same
+        // paymentId already (set together in checkout/route.ts) and
+        // intentionally has no pnr of its own — resolved via linkedBooking.
+        if (booking.linkedBooking) {
+          writes.push(
+            prisma.booking.update({
+              where: { id: booking.linkedBooking.id },
+              data: { status: "CONFIRMED" },
+            })
+          );
+        }
+
+        await prisma.$transaction(writes);
+
+        // One combined confirmation email, covering both legs when present.
         const firstPassenger = booking.passengers[0];
         if (firstPassenger) {
           const { html, text } = buildPaymentConfirmationEmail({
@@ -81,6 +103,15 @@ export async function POST(request: NextRequest) {
             departureDateTime: booking.trip.departureDateTime.toISOString(),
             aircraftType: booking.trip.plane.aircraftType,
             totalAmount: booking.payment?.amount ?? 0,
+            returnLeg: booking.linkedBooking
+              ? {
+                  departingPlace: booking.linkedBooking.trip.departingPlace,
+                  destination: booking.linkedBooking.trip.destination,
+                  departureDateTime:
+                    booking.linkedBooking.trip.departureDateTime.toISOString(),
+                  aircraftType: booking.linkedBooking.trip.plane.aircraftType,
+                }
+              : undefined,
           });
 
           try {
@@ -92,8 +123,6 @@ export async function POST(request: NextRequest) {
               text,
             });
           } catch (emailError) {
-            // Don't fail the whole webhook if email sending fails —
-            // the booking is already confirmed and paid, email is best-effort
             console.error("Failed to send confirmation email:", emailError);
           }
         }

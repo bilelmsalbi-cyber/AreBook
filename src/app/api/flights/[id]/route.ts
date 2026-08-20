@@ -1,6 +1,3 @@
-// Goes in: D:\AreBook\src\app\api\flights\[id]\route.ts
-// (replaces the whole file)
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 

@@ -1,10 +1,7 @@
-// Goes in: D:\AreBook\src\app\api\bookings\[id]\checkout\route.ts
-// (replaces the whole file)
-
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { priceService, RawService } from "@/lib/servicePricing";
-
+import { priceService, RawService } from "@/lib/pricing/engine";
+import { calculateRoundTripPrice } from "@/lib/pricing/engine";
 type IncomingPassenger = {
   firstName: string;
   lastName: string;
@@ -55,9 +52,16 @@ export async function POST(
       }
     }
 
+    // Passengers are entered once per round-trip pair, always on the
+    // outbound (primary) booking. linkedBooking is included so its fare
+    // can be folded into the discount calculation, and so it also gets
+    // its own Passenger records (see below).
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { trip: true },
+      include: {
+        trip: true,
+        linkedBooking: { include: { trip: true } },
+      },
     });
 
     if (!booking) {
@@ -85,13 +89,22 @@ export async function POST(
       );
     }
 
+    // A round trip means two Booking rows (outbound + linked return).
+    // Each Passenger row requires its own unique Person (personId is @unique),
+    // so the same traveler needs one Person+Passenger pair per leg — created
+    // from the same submitted form data, not entered twice by the user.
+    const bookingIdsToPopulate = booking.linkedBookingId
+      ? [bookingId, booking.linkedBookingId]
+      : [bookingId];
+
     // Everything below runs as ONE atomic transaction:
     // either all writes succeed, or none of them do.
     const result = await prisma.$transaction(async (tx) => {
-      // ---- Clean up any previous passengers for this booking ----
+      // ---- Clean up any previous passengers for this booking (and its
+      // linked leg, if any) ----
       // (handles the case where the user goes back and edits their info)
       const oldPassengers = await tx.passenger.findMany({
-        where: { bookingId },
+        where: { bookingId: { in: bookingIdsToPopulate } },
         select: { id: true, personId: true, docId: true },
       });
 
@@ -115,76 +128,114 @@ export async function POST(
       }
 
       // ---- Rebuild fresh passengers from the submitted form data ----
+      // For a round trip, each traveler gets one Passenger row per leg
+      // (separate Person rows, since personId is unique).
       let specialRequestsTotal = 0;
 
       for (const p of passengers) {
-        const person = await tx.person.create({
-          data: {
-            firstName: p.firstName,
-            lastName: p.lastName,
-            email: p.email,
-            phone: p.phone,
-            gender: p.gender,
-            dateBirth: new Date(p.dateBirth),
-          },
-        });
-
-        let documentId: number | null = null;
-        if (p.hasDocument) {
-          const doc = await tx.document.create({
+        for (const legBookingId of bookingIdsToPopulate) {
+          const person = await tx.person.create({
             data: {
-              documentType: p.documentType,
-              number: p.documentNumber,
-              country: p.documentCountry,
-              expiryDate: new Date(p.documentExpiry),
+              firstName: p.firstName,
+              lastName: p.lastName,
+              email: p.email,
+              phone: p.phone,
+              gender: p.gender,
+              dateBirth: new Date(p.dateBirth),
             },
           });
-          documentId = doc.id;
-        }
 
-        const passenger = await tx.passenger.create({
-          data: {
-            personId: person.id,
-            bookingId,
-            docId: documentId,
-          },
-        });
+          let documentId: number | null = null;
+          if (p.hasDocument) {
+            const doc = await tx.document.create({
+              data: {
+                documentType: p.documentType,
+                number: p.documentNumber,
+                country: p.documentCountry,
+                expiryDate: new Date(p.documentExpiry),
+              },
+            });
+            documentId = doc.id;
+          }
 
-        // Recompute every service price server-side (never trust client price)
-        for (const service of p.services) {
-          const { label, price } = priceService(service);
-          specialRequestsTotal += price;
-
-          await tx.specialRequest.create({
+          const passenger = await tx.passenger.create({
             data: {
-              passengerId: passenger.id,
-              requestType: label,
-              price,
+              personId: person.id,
+              bookingId: legBookingId,
+              docId: documentId,
             },
           });
+
+          // Recompute every service price server-side (never trust client price).
+          // The traveler picks each service once, but it's applied to both legs
+          // of a round trip (airport-standard behavior) — so it's created once
+          // per Passenger row (one per leg), and its price is added to the total
+          // each time, doubling it for round trips.
+          for (const service of p.services) {
+            const { label, price } = await priceService(service);
+            specialRequestsTotal += price;
+
+            await tx.specialRequest.create({
+              data: {
+                passengerId: passenger.id,
+                requestType: label,
+                price,
+              },
+            });
+          }
         }
       }
 
-      // ---- Compute the fare and create the Payment row (still unpaid) ----
-      const farePerSeat =
+      // ---- Compute the fare ----
+      // One-way: just this leg's fare.
+      // Round-trip: combine both legs' fares through the discount tiers
+      // in lib/pricing.ts — never a plain sum.
+      const outboundFarePerSeat =
         booking.seatClass === "BUSINESS"
           ? booking.trip.priceBusiness
           : booking.trip.priceGuest;
+      const outboundFare = outboundFarePerSeat * booking.seatsHeld;
 
-      const totalAmount = farePerSeat * booking.seatsHeld + specialRequestsTotal;
+      let fare = outboundFare;
 
-      const payment = await tx.payment.upsert({
-        where: { bookingId },
-        create: {
-          bookingId,
-          amount: totalAmount,
-          status: "PENDING", // not paid yet
-        },
-        update: {
-          amount: totalAmount,
-          status: "PENDING",
-        },
+      if (booking.linkedBooking) {
+        const returnFarePerSeat =
+          booking.linkedBooking.seatClass === "BUSINESS"
+            ? booking.linkedBooking.trip.priceBusiness
+            : booking.linkedBooking.trip.priceGuest;
+        const returnFare = returnFarePerSeat * booking.linkedBooking.seatsHeld;
+
+        fare = await calculateRoundTripPrice(outboundFare, returnFare);
+      }
+
+      const totalAmount = fare + specialRequestsTotal;
+
+      // ---- Create or update the single Payment for this booking (pair) ----
+      // Payment no longer points at a Booking — Booking points at Payment
+      // (`Booking.paymentId`), so the same Payment row can be shared by
+      // both legs of a round trip.
+      const payment = booking.paymentId
+        ? await tx.payment.update({
+            where: { id: booking.paymentId },
+            data: { amount: totalAmount, status: "PENDING" },
+          })
+        : await tx.payment.create({
+            data: { amount: totalAmount, status: "PENDING" },
+          });
+
+      // Point this booking — and its linked leg, if any — at the Payment.
+      // Safe to re-run: both writes are idempotent.
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { paymentId: payment.id },
       });
+
+      if (booking.linkedBookingId) {
+        await tx.booking.update({
+          where: { id: booking.linkedBookingId },
+          data: { paymentId: payment.id },
+        });
+      }
 
       return { totalAmount, payment };
     });

@@ -1,4 +1,3 @@
-// Goes in: D:\AreBook\src\components\PlaneLoader.tsx
 "use client";
 
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";

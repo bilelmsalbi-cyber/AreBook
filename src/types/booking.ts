@@ -13,8 +13,22 @@ export type BookingResult = {
     departureDateTime: string;
     plane: { aircraftType: string };
   };
+  // Present only when this row's round-trip return leg was found in the
+  // same search results — see api/admin/bookings/route.ts grouping logic.
+  returnTrip: {
+    id: number;
+    departingPlace: string;
+    destination: string;
+    departureDateTime: string;
+    plane: { aircraftType: string };
+  } | null;
   passengers: { person: { firstName: string; lastName: string } }[];
   payment: { status: "PENDING" | "PAID" | "FAILED"; amount: number } | null;
+  linkedBooking: {
+    id: number;
+    pnr: string | null;
+    payment: { status: string; amount: number } | null;
+  } | null;
 };
 
 export type TripOption = {

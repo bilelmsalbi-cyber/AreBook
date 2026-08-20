@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type TripType = "ONE_WAY" | "ROUND_TRIP";
 
@@ -28,12 +29,19 @@ export default function Home() {
       return;
     }
 
+    if (tripType === "ROUND_TRIP" && departureDate && returnDate && returnDate < departureDate) {
+      setValidationError("Return date cannot be before the departure date.");
+      return;
+    }
+
     setValidationError("");
 
     const params = new URLSearchParams();
+    params.set("tripType", tripType);
     params.set("departingPlace", departingPlace);
     params.set("destination", destination);
     if (departureDate) params.set("departureDate", departureDate);
+    if (tripType === "ROUND_TRIP" && returnDate) params.set("returnDate", returnDate);
     params.set("adults", adults.toString());
     params.set("children", children.toString());
     params.set("infants", infants.toString());
@@ -47,33 +55,57 @@ export default function Home() {
     <main className="relative min-h-screen text-[#16324F]">
       {/* ==================== Full-bleed background photo ====================
           Covers the hero strip AND the area behind the white search card. */}
-      <div
-        className="fixed inset-0 -z-10 bg-cover bg-center"
-        style={{ backgroundImage: "url('/plane.jpg')" }}
-      />
-      {/* Overlay: dark brand-blue wash up top for the headline, softening down
-          to a hazy white toward the bottom so the floating white card still
-          feels grounded on the same background. */}
-      <div className="fixed inset-0 -z-10 bg-linear-to-b from-[#0B1E3D]/90 via-[#1D4ED8]/70 to-[#EAF3FF]/95" />
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-1/2 top-1/2 h-[98%] w-[101%] -translate-x-1/2 -translate-y-1/2">
+          <Image
+            src="/plane.jpg"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+            style={{ objectPosition: "100% 93%" }}
+          />
+        </div>
+      </div>
+      <div className="fixed inset-0 -z-10 bg-linear-to-r from-[#0B1E3D]/80 via-[#0B1E3D]/35 to-transparent" />
+      <div className="fixed inset-0 -z-10 bg-linear-to-b from-transparent via-transparent to-[#EAF3FF]/95" />
 
       {/* ==================== Hero ==================== */}
-      <section className="relative px-6 pb-24 pt-14 text-center md:px-12 md:pt-24">
-        <div className="mx-auto max-w-2xl">
-          <p className="mb-3 font-mono text-xs tracking-[0.3em] text-[#DCEEFF]">
-            AREBOOK · WORLDWIDE FLIGHTS
-          </p>
-          <h1 className="text-4xl font-bold tracking-tight text-white drop-shadow-sm md:text-6xl">
-            Your Next Journey Starts Here
+      <section className="relative px-6 pb-28 pt-24 md:px-12 md:pt-32">
+        <div className="max-w-xl">
+          <div className="mb-5 inline-flex items-center gap-3 rounded-full border border-white/30 bg-white/10 px-4 py-1.5 font-mono text-xs tracking-[0.2em] text-white backdrop-blur-sm">
+            <span>ANYWHERE</span>
+            <span className="text-white/50">✈</span>
+            <span>EVERYWHERE</span>
+            <span className="mx-1 h-3 w-px bg-white/30" />
+            <span className="text-white/70">AREBOOK</span>
+          </div>
+
+          <h1 className="text-4xl font-bold leading-tight tracking-tight text-white [text-shadow:0_2px_16px_rgba(11,30,61,0.7)] md:text-6xl">
+            Fly on your terms.
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-[#DCEEFF]">
-            Compare fares, pick your seat, and book in minutes — wherever the sky takes you.
+          <p className="mt-4 max-w-md text-[#DCEEFF] [text-shadow:0_1px_8px_rgba(11,30,61,0.7)]">
+            No hidden fees, no guesswork — just clear fares and a seat that&apos;s
+            actually yours.
           </p>
         </div>
       </section>
 
+      
+      <div
+        className="relative mx-auto -mb-3 h-3 max-w-5xl bg-repeat-x"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, rgba(255,255,255,0.9) 2.5px, transparent 2.5px)",
+          backgroundSize: "18px 18px",
+          backgroundPosition: "9px 0",
+        }}
+      />
+
       {/* ==================== Search Form ==================== */}
       <section className="relative px-6 pb-16 md:px-12">
-        <div className="mx-auto -mt-10 max-w-5xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)] md:p-8">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)] md:p-8">
           <fieldset className="mb-6 flex gap-6">
             <label className="flex cursor-pointer items-center gap-2">
               <input

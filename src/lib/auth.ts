@@ -1,3 +1,5 @@
+import type { JWT } from "next-auth/jwt";
+import type { Session } from "next-auth";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
@@ -64,9 +66,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
-        (session.user as any).customerId = token.customerId;
+        session.user.customerId = token.customerId;
       }
       return session;
     },

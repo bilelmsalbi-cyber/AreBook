@@ -25,6 +25,20 @@ export async function GET(
           },
         },
         payment: true,
+        // Additive: lets consumers (like the invoice) compute an accurate
+        // services total across both legs, not just the outbound one.
+        linkedBooking: {
+          include: {
+            trip: { include: { plane: true } },
+            passengers: {
+              include: {
+                person: true,
+                document: true,
+                specialRequests: true,
+              },
+            },
+          },
+        },
       },
     });
 

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useParams, useSearchParams } from "next/navigation";
+import Image from "next/image";
 
 type Trip = {
   id: number;
@@ -17,6 +18,12 @@ type Trip = {
   plane: {
     aircraftType: string;
   };
+};
+
+type PricingPreview = {
+  original: number;
+  discounted: number;
+  savings: number;
 };
 
 const GUEST_FEATURES = [
@@ -34,48 +41,124 @@ const BUSINESS_FEATURES = [
   "Lounge access",
 ];
 
+async function fetchPricingPreview(outboundFare: number, returnFare: number): Promise<PricingPreview> {
+  const res = await fetch("/api/pricing/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ outboundFare, returnFare }),
+  });
+  if (!res.ok) {
+    throw new Error("Failed to compute pricing preview");
+  }
+  return res.json();
+}
+
 function BookingContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isBooking, setIsBooking] = useState(false);
 
-  const tripId = params.id as string;
+  const returnTripId = params.id as string;
   const adults = parseInt(searchParams.get("adults") || "1", 10);
   const children = parseInt(searchParams.get("children") || "0", 10);
   const seatsNeeded = adults + children;
 
+  const tripType = searchParams.get("tripType") || "ONE_WAY";
+  const isRoundTrip = tripType === "ROUND_TRIP";
+  const outboundTripId = searchParams.get("outboundTripId") || "";
+
+  // In one-way mode, "trip" holds the only leg.
+  // In round-trip mode, "trip" holds the return leg and "outboundTrip"
+  // holds the outbound leg — both must be loaded before showing the page.
   const [trip, setTrip] = useState<Trip | null>(null);
+  const [outboundTrip, setOutboundTrip] = useState<Trip | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
 
+  // Round-trip pricing (with the DB-driven discount applied) — fetched
+  // from the server, never computed locally in the browser.
+  const [guestPricing, setGuestPricing] = useState<PricingPreview | null>(null);
+  const [businessPricing, setBusinessPricing] = useState<PricingPreview | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(isRoundTrip);
+
   useEffect(() => {
-    async function fetchTrip() {
+    async function fetchTrips() {
       try {
-        const res = await fetch(`/api/flights/${tripId}`);
+        const idsToFetch = isRoundTrip ? [returnTripId, outboundTripId] : [returnTripId];
 
-        if (!res.ok) {
-          throw new Error(`Failed to fetch trip (status ${res.status})`);
+        const responses = await Promise.all(
+          idsToFetch.map((id) => fetch(`/api/flights/${id}`))
+        );
+
+        for (const res of responses) {
+          if (!res.ok) {
+            throw new Error(`Failed to fetch trip (status ${res.status})`);
+          }
         }
 
-        const data = await res.json();
+        const data = await Promise.all(responses.map((res) => res.json()));
 
-        if (data.error) {
-          throw new Error(data.error);
+        for (const trip of data) {
+          if (trip.error) {
+            throw new Error(trip.error);
+          }
         }
 
-        if (!data || !data.id) {
+        const [returnLegData, outboundLegData] = data;
+
+        if (!returnLegData || !returnLegData.id) {
+          setNotFound(true);
+          return;
+        }
+        if (isRoundTrip && (!outboundLegData || !outboundLegData.id)) {
           setNotFound(true);
           return;
         }
 
-        setTrip(data);
+        setTrip(returnLegData);
+        if (isRoundTrip) {
+          setOutboundTrip(outboundLegData);
+        }
       } catch (err) {
         setFetchError(err instanceof Error ? err : new Error("Unknown error"));
       }
     }
-    fetchTrip();
-  }, [tripId]);
+    fetchTrips();
+  }, [returnTripId, outboundTripId, isRoundTrip]);
+
+  // Once both legs are loaded (round trip only), fetch the discounted
+  // price for both seat classes in parallel — the discount tiers now live
+  // in the database, so this can no longer be computed client-side.
+  useEffect(() => {
+    if (!isRoundTrip || !trip || !outboundTrip) {
+      return;
+    }
+
+    async function loadPricing() {
+      setPricingLoading(true);
+      try {
+        const [guest, business] = await Promise.all([
+          fetchPricingPreview(
+            outboundTrip!.priceGuest * seatsNeeded,
+            trip!.priceGuest * seatsNeeded
+          ),
+          fetchPricingPreview(
+            outboundTrip!.priceBusiness * seatsNeeded,
+            trip!.priceBusiness * seatsNeeded
+          ),
+        ]);
+        setGuestPricing(guest);
+        setBusinessPricing(business);
+      } catch (err) {
+        setFetchError(err instanceof Error ? err : new Error("Failed to load pricing"));
+      } finally {
+        setPricingLoading(false);
+      }
+    }
+
+    loadPricing();
+  }, [isRoundTrip, trip, outboundTrip, seatsNeeded]);
 
   // Re-throw during render so Next.js's error.tsx boundary catches it
   if (fetchError) {
@@ -92,16 +175,28 @@ function BookingContent() {
 
   async function handleConfirm(seatClass: "GUEST" | "BUSINESS") {
     setIsBooking(true);
+
     const res = await fetch("/api/bookings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tripId: trip!.id,
-        tripType: "ONE_WAY",
-        seatClass,
-        adults,
-        children,
-      }),
+      body: JSON.stringify(
+        isRoundTrip
+          ? {
+              tripType: "ROUND_TRIP",
+              outboundTripId: parseInt(outboundTripId, 10),
+              returnTripId: trip!.id,
+              seatClass,
+              adults,
+              children,
+            }
+          : {
+              tripId: trip!.id,
+              tripType: "ONE_WAY",
+              seatClass,
+              adults,
+              children,
+            }
+      ),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -109,42 +204,100 @@ function BookingContent() {
       setIsBooking(false);
       return;
     }
-    router.push(`/passengers/${data.id}?adults=${adults}&children=${children}`);
+
+    // The outbound booking is always the primary one — passenger data
+    // and the linked return leg are managed from there.
+    const primaryBookingId = isRoundTrip ? data.outboundBooking.id : data.id;
+    router.push(`/passengers/${primaryBookingId}?adults=${adults}&children=${children}`);
   }
 
-  if (!trip) {
+  if (!trip || (isRoundTrip && !outboundTrip) || (isRoundTrip && pricingLoading)) {
     return null; // loading.tsx handles the loading state
   }
 
-  const guestAvailable = trip.availableSeatsGuest >= seatsNeeded;
-  const businessAvailable = trip.availableSeatsBusiness >= seatsNeeded;
+  const guestAvailable =
+    trip.availableSeatsGuest >= seatsNeeded &&
+    (!isRoundTrip || outboundTrip!.availableSeatsGuest >= seatsNeeded);
+  const businessAvailable =
+    trip.availableSeatsBusiness >= seatsNeeded &&
+    (!isRoundTrip || outboundTrip!.availableSeatsBusiness >= seatsNeeded);
+
+  // One-way: no discount applies, just the per-seat price × seats needed.
+  // Round-trip: the discounted values come from the server (guestPricing /
+  // businessPricing), already fetched above.
+  const guestDisplay: PricingPreview = isRoundTrip
+    ? guestPricing!
+    : { original: trip.priceGuest * seatsNeeded, discounted: trip.priceGuest * seatsNeeded, savings: 0 };
+
+  const businessDisplay: PricingPreview = isRoundTrip
+    ? businessPricing!
+    : {
+        original: trip.priceBusiness * seatsNeeded,
+        discounted: trip.priceBusiness * seatsNeeded,
+        savings: 0,
+      };
 
   return (
     <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
       <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-5xl">
-          <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
-            {trip.plane.aircraftType}
-          </p>
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
-            {trip.departingPlace} to {trip.destination}
-          </h1>
-          <p className="mt-1 text-sm text-[#DCEEFF]">
-            {new Date(trip.departureDateTime).toLocaleString("en-GB")}
-          </p>
+          {isRoundTrip ? (
+            <>
+              <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+                ROUND TRIP
+              </p>
+              <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+                {outboundTrip!.departingPlace} to {outboundTrip!.destination}
+              </h1>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Outbound</p>
+                  <p className="mt-1 text-sm text-white">
+                    {outboundTrip!.departingPlace} &rarr; {outboundTrip!.destination}
+                  </p>
+                  <p className="text-xs text-[#DCEEFF]">
+                    {new Date(outboundTrip!.departureDateTime).toLocaleString("en-GB")}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Return</p>
+                  <p className="mt-1 text-sm text-white">
+                    {trip.departingPlace} &rarr; {trip.destination}
+                  </p>
+                  <p className="text-xs text-[#DCEEFF]">
+                    {new Date(trip.departureDateTime).toLocaleString("en-GB")}
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+                {trip.plane.aircraftType}
+              </p>
+              <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+                {trip.departingPlace} to {trip.destination}
+              </h1>
+              <p className="mt-1 text-sm text-[#DCEEFF]">
+                {new Date(trip.departureDateTime).toLocaleString("en-GB")}
+              </p>
+            </>
+          )}
         </div>
       </section>
       <section className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-5xl">
           <h2 className="mb-6 text-lg font-semibold text-[#16324F]">
             Choose your class — {seatsNeeded} seat(s) needed
+            {isRoundTrip && " · applies to both flights"}
           </h2>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <ClassCard
               className="Guest"
               features={GUEST_FEATURES}
-              price={trip.priceGuest}
+              pricing={guestDisplay}
               available={guestAvailable}
               isBooking={isBooking}
               onConfirm={() => handleConfirm("GUEST")}
@@ -152,11 +305,11 @@ function BookingContent() {
             <ClassCard
               className="Business"
               features={BUSINESS_FEATURES}
-              price={trip.priceBusiness}
+              pricing={businessDisplay}
               available={businessAvailable}
               isBooking={isBooking}
               onConfirm={() => handleConfirm("BUSINESS")}
-/>
+            />
           </div>
         </div>
       </section>
@@ -167,25 +320,35 @@ function BookingContent() {
 function ClassCard({
   className,
   features,
-  price,
+  pricing,
   available,
   onConfirm,
   isBooking,
 }: {
   className: string;
   features: string[];
-  price: number;
+  pricing: { original: number; discounted: number; savings: number };
   available: boolean;
   onConfirm: () => void;
   isBooking: boolean;
 }) {
+  const imageSrc = className === "Business" ? "/business_class.jpg" : "/guest_class.jpg";
+  const hasDiscount = pricing.savings > 0;
+
   return (
     <div className="flex flex-col rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-3xl hover:shadow-[0_20px_40px_-15px_rgba(37,99,235,0.3)]">
-      <div className="mb-4 flex h-36 items-center justify-center rounded-xl bg-[#F3F9FF] text-xs text-[#9DB6CF]">
-        Image placeholder
+      <div className="relative h-40 w-full overflow-hidden rounded-xl bg-[#F3F9FF]">
+        <Image
+          src={imageSrc}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-contain"
+        />
       </div>
 
-      <h3 className="text-lg font-bold text-[#16324F]">{className}</h3>
+      <h3 className="mt-4 text-lg font-bold text-[#16324F]">{className}</h3>
 
       <ul className="mt-3 flex-1 space-y-2">
         {features.map((feature) => (
@@ -196,7 +359,25 @@ function ClassCard({
         ))}
       </ul>
 
-      <p className="mt-5 text-3xl font-bold text-[#16324F]">{price} TND</p>
+      <div className="mt-5">
+        {hasDiscount ? (
+          <>
+            <p className="text-sm text-[#9DB6CF] line-through">
+              {pricing.original.toFixed(2)} TND
+            </p>
+            <p className="text-3xl font-bold text-[#16324F]">
+              {pricing.discounted.toFixed(2)} TND
+            </p>
+            <p className="mt-1 text-sm font-medium text-emerald-600">
+              You save {pricing.savings.toFixed(2)} TND
+            </p>
+          </>
+        ) : (
+          <p className="text-3xl font-bold text-[#16324F]">
+            {pricing.discounted.toFixed(2)} TND
+          </p>
+        )}
+      </div>
 
       {!available && (
         <p className="mt-2 text-sm font-medium text-red-500">

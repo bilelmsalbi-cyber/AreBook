@@ -1,5 +1,3 @@
-// Goes in: D:\AreBook\src\app\loading.tsx
-
 import PlaneLoader from "@/components/PlaneLoader";
 
 export default function Loading() {

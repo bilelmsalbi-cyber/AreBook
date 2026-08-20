@@ -16,26 +16,59 @@ export async function POST(
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { payment: true, trip: true },
+      include: {
+        payment: true,
+        trip: true,
+        linkedBooking: { include: { payment: true, trip: true } },
+      },
     });
 
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
-    if (!booking.payment) {
+
+    // A round-trip pair shares a single Payment, held by whichever leg
+    // was checked out first (see checkout/route.ts). This lets /pay be
+    // called with either leg's id and still resolve to the right invoice.
+    const paymentBooking = booking.payment ? booking : booking.linkedBooking;
+
+    if (!paymentBooking?.payment) {
       return NextResponse.json(
         { error: "No invoice found for this booking. Please review your booking first." },
         { status: 400 }
       );
     }
-    if (booking.status === "CONFIRMED" || booking.payment.status === "PAID") {
+
+    if (paymentBooking.status === "CONFIRMED" || paymentBooking.payment.status === "PAID") {
       return NextResponse.json(
         { error: "This booking has already been paid" },
         { status: 409 }
       );
     }
 
+    // The 7-minute seat hold applies here too, not just at checkout. Both
+    // legs of a round trip share the same expiresAt (set together at
+    // creation in api/bookings/route.ts), so checking the payment-holding
+    // leg is enough. Without this check, a lapsed hold could still be paid
+    // for after the seat was silently freed up for someone else to book —
+    // risking a double-booked seat.
+    if (paymentBooking.expiresAt && paymentBooking.expiresAt < new Date()) {
+      return NextResponse.json(
+        { error: "This booking hold has expired. Please search and book again." },
+        { status: 410 }
+      );
+    }
+
     const origin = request.nextUrl.origin;
+
+    // Build a route label covering both legs when this is a round trip.
+    const legs = [booking.trip, booking.linkedBooking?.trip].filter(
+      (t): t is NonNullable<typeof t> => Boolean(t)
+    );
+    const routeLabel =
+      legs.length > 1
+        ? `${legs[0].departingPlace} \u21C4 ${legs[0].destination}`
+        : `${legs[0].departingPlace} \u2192 ${legs[0].destination}`;
 
     // NOTE: Stripe test account settles in EUR, so we pass the invoice
     // total (computed in TND) as EUR cents. This is a simplification for
@@ -48,22 +81,22 @@ export async function POST(
           price_data: {
             currency: "eur",
             product_data: {
-              name: `AreBook — Booking #${booking.id} (${booking.trip.departingPlace} → ${booking.trip.destination})`,
+              name: `AreBook — Booking #${paymentBooking.id} (${routeLabel})`,
             },
-            unit_amount: Math.round(booking.payment.amount * 100),
+            unit_amount: Math.round(paymentBooking.payment.amount * 100),
           },
           quantity: 1,
         },
       ],
-      success_url: `${origin}/payment/success/${booking.id}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/payment/cancel/${booking.id}`,
+      success_url: `${origin}/payment/success/${paymentBooking.id}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/payment/cancel/${paymentBooking.id}`,
       metadata: {
-        bookingId: String(booking.id),
+        bookingId: String(paymentBooking.id),
       },
     });
 
     await prisma.booking.update({
-      where: { id: booking.id },
+      where: { id: paymentBooking.id },
       data: { stripeSessionId: session.id },
     });
 

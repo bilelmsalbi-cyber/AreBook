@@ -1,3 +1,10 @@
+type FlightLegData = {
+  departingPlace: string;
+  destination: string;
+  departureDateTime: string;
+  aircraftType: string;
+};
+
 type PaymentConfirmationData = {
   pnr: string;
   firstName: string;
@@ -6,10 +13,40 @@ type PaymentConfirmationData = {
   departureDateTime: string;
   aircraftType: string;
   totalAmount: number;
+  // Only present for round-trip bookings — renders a second flight block.
+  returnLeg?: FlightLegData;
 };
 
+function renderLegHtml(label: string | null, leg: FlightLegData) {
+  const labelHtml = label
+    ? `<p style="margin: 16px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #2563EB; font-weight: bold;">${label}</p>`
+    : "";
+  return `${labelHtml}
+        <p style="margin: 4px 0;"><strong>${leg.departingPlace} → ${leg.destination}</strong></p>
+        <p style="margin: 4px 0; color: #5C7A96;">${new Date(leg.departureDateTime).toLocaleString("en-GB")} — ${leg.aircraftType}</p>`;
+}
+
+function renderLegText(label: string | null, leg: FlightLegData) {
+  const labelText = label ? `${label}\n` : "";
+  return `${labelText}${leg.departingPlace} → ${leg.destination}
+${new Date(leg.departureDateTime).toLocaleString("en-GB")} — ${leg.aircraftType}`;
+}
+
 export function buildPaymentConfirmationEmail(data: PaymentConfirmationData) {
-  const formattedDate = new Date(data.departureDateTime).toLocaleString("en-GB");
+  const outbound: FlightLegData = {
+    departingPlace: data.departingPlace,
+    destination: data.destination,
+    departureDateTime: data.departureDateTime,
+    aircraftType: data.aircraftType,
+  };
+
+  const legsHtml = data.returnLeg
+    ? renderLegHtml("Outbound", outbound) + renderLegHtml("Return", data.returnLeg)
+    : renderLegHtml(null, outbound);
+
+  const legsText = data.returnLeg
+    ? `${renderLegText("Outbound", outbound)}\n\n${renderLegText("Return", data.returnLeg)}`
+    : renderLegText(null, outbound);
 
   const html = `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #16324F;">
@@ -27,9 +64,9 @@ export function buildPaymentConfirmationEmail(data: PaymentConfirmationData) {
           </p>
         </div>
 
-        <p style="margin: 4px 0;"><strong>${data.departingPlace} → ${data.destination}</strong></p>
-        <p style="margin: 4px 0; color: #5C7A96;">${formattedDate} — ${data.aircraftType}</p>
-        <p style="margin: 12px 0; font-weight: bold;">Total paid: ${data.totalAmount} TND</p>
+        ${legsHtml}
+
+        <p style="margin: 16px 0 0; font-weight: bold;">Total paid: ${data.totalAmount} TND</p>
 
         <p style="margin-top: 24px; font-size: 13px; color: #5C7A96;">
           Please present your PNR at the airport check-in counter.
@@ -43,8 +80,9 @@ export function buildPaymentConfirmationEmail(data: PaymentConfirmationData) {
 Thank you for choosing AreBook. Your payment was successful and your booking is confirmed.
 
 Booking Reference (PNR): ${data.pnr}
-${data.departingPlace} → ${data.destination}
-${formattedDate} — ${data.aircraftType}
+
+${legsText}
+
 Total paid: ${data.totalAmount} TND
 
 Please present your PNR at the airport check-in counter.`;

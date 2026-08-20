@@ -27,11 +27,38 @@ function passengerNames(booking: BookingResult) {
     .join(", ");
 }
 
+// A round-trip return leg has no Payment/pnr of its own — both resolve
+// back through linkedBooking. See api/admin/bookings/route.ts.
 function paymentLabel(booking: BookingResult) {
-  if (!booking.payment) return "Not paid yet";
-  if (booking.payment.status === "PAID") return "Paid";
-  if (booking.payment.status === "FAILED") return "Failed";
+  const effectivePayment = booking.payment ?? booking.linkedBooking?.payment ?? null;
+  if (!effectivePayment) return "Not paid yet";
+  if (effectivePayment.status === "PAID") return "Paid";
+  if (effectivePayment.status === "FAILED") return "Failed";
   return "Pending";
+}
+
+function pnrLabel(booking: BookingResult) {
+  return booking.pnr || booking.linkedBooking?.pnr || "—";
+}
+
+// Round-trip: only the outbound leg's Payment holds the amount (covers
+// both legs). See api/admin/bookings/route.ts.
+function priceLabel(booking: BookingResult) {
+  const effectivePayment = booking.payment ?? booking.linkedBooking?.payment ?? null;
+  if (!effectivePayment) return "—";
+  return `$${effectivePayment.amount.toFixed(2)}`;
+}
+
+// A booking is "past" only when every leg it includes has already
+// departed. One-way: just the outbound leg. Round-trip: both outbound
+// and return must be in the past — if the return leg is still upcoming,
+// the booking as a whole is still upcoming.
+function isPastBooking(booking: BookingResult) {
+  const now = Date.now();
+  const outboundPast = new Date(booking.trip.departureDateTime).getTime() < now;
+  if (!booking.returnTrip) return outboundPast;
+  const returnPast = new Date(booking.returnTrip.departureDateTime).getTime() < now;
+  return outboundPast && returnPast;
 }
 
 const emptyFilters = {
@@ -53,9 +80,7 @@ export default function BookingsManager({
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Booking currently shown in the "View Passengers" modal — mirrors the
-  // MaintenanceModal pattern: modal only mounts while this is non-null.
+  const [excludePast, setExcludePast] = useState(true);
   const [viewingBookingId, setViewingBookingId] = useState<number | null>(
     null
   );
@@ -103,7 +128,12 @@ export default function BookingsManager({
     setResults([]);
     setHasSearched(false);
     setError(null);
+    setExcludePast(true);
   }
+
+  const visibleResults = excludePast
+    ? results.filter((b) => !isPastBooking(b))
+    : results;
 
   return (
     <div>
@@ -114,7 +144,6 @@ export default function BookingsManager({
         </p>
       </div>
 
-      {/* Combined filter bar */}
       <form
         onSubmit={handleSearch}
         className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-[#1E293B] bg-[#111827] p-4 md:grid-cols-6"
@@ -201,7 +230,17 @@ export default function BookingsManager({
           />
         </div>
 
-        <div className="col-span-2 flex items-end gap-3 md:col-span-6">
+        <div className="col-span-2 flex items-end gap-4 md:col-span-6">
+          <label className="flex items-center gap-1.5 text-sm text-[#94A3B8]">
+            <input
+              type="radio"
+              checked={excludePast}
+              onClick={() => setExcludePast((prev) => !prev)}
+              onChange={() => {}}
+              className="h-4 w-4 accent-[#3B82F6]"
+            />
+            Exclude past bookings
+          </label>
           <button
             type="submit"
             disabled={loading}
@@ -221,7 +260,6 @@ export default function BookingsManager({
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-      {/* Results */}
       <div className="mt-6 overflow-hidden rounded-xl border border-[#1E293B]">
         <table className="w-full text-left text-sm">
           <thead className="bg-[#111827] text-[#64748B]">
@@ -233,6 +271,7 @@ export default function BookingsManager({
               <th className="px-4 py-3 font-medium">Class</th>
               <th className="px-4 py-3 font-medium">Booking Status</th>
               <th className="px-4 py-3 font-medium">Payment</th>
+              <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Booked On</th>
               <th className="px-4 py-3 font-medium"></th>
             </tr>
@@ -240,28 +279,35 @@ export default function BookingsManager({
           <tbody>
             {!hasSearched && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={10} className="px-4 py-6 text-center text-[#64748B]">
                   Enter at least one filter and search.
                 </td>
               </tr>
             )}
-            {hasSearched && !loading && results.length === 0 && (
+            {hasSearched && !loading && visibleResults.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={10} className="px-4 py-6 text-center text-[#64748B]">
                   No bookings match this search.
                 </td>
               </tr>
             )}
-            {results.map((booking) => (
+            {visibleResults.map((booking) => (
               <tr
                 key={booking.id}
                 className="border-t border-[#1E293B] text-[#CBD5E1]"
               >
                 <td className="px-4 py-3">#{booking.id}</td>
-                <td className="px-4 py-3">{booking.pnr || "—"}</td>
+                <td className="px-4 py-3">{pnrLabel(booking)}</td>
                 <td className="px-4 py-3">{passengerNames(booking)}</td>
                 <td className="px-4 py-3">
-                  {booking.trip.departingPlace} → {booking.trip.destination}
+                  <div>
+                    {booking.trip.departingPlace} → {booking.trip.destination}
+                  </div>
+                  {booking.returnTrip && (
+                    <div className="mt-0.5 text-[#3B82F6]">
+                      ↩ {booking.returnTrip.departingPlace} → {booking.returnTrip.destination}
+                    </div>
+                  )}
                   <div className="text-xs text-[#64748B]">
                     {booking.trip.plane.aircraftType}
                   </div>
@@ -269,6 +315,7 @@ export default function BookingsManager({
                 <td className="px-4 py-3">{booking.seatClass}</td>
                 <td className="px-4 py-3">{booking.status}</td>
                 <td className="px-4 py-3">{paymentLabel(booking)}</td>
+                <td className="px-4 py-3">{priceLabel(booking)}</td>
                 <td className="px-4 py-3">
                   {formatDateTime(booking.bookingDate)}
                 </td>

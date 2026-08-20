@@ -28,20 +28,67 @@ type PassengerInfo = {
   specialRequests: SpecialRequest[];
 };
 
+type FullTripInfo = {
+  departingPlace: string;
+  destination: string;
+  departureDateTime: string;
+  priceGuest: number;
+  priceBusiness: number;
+  plane: { aircraftType: string };
+};
+
+type PaymentSummary = {
+  amount: number;
+  status: string;
+};
+
 type BookingDetails = {
   id: number;
   seatClass: "GUEST" | "BUSINESS";
   seatsHeld: number;
-  trip: {
-    departingPlace: string;
-    destination: string;
-    departureDateTime: string;
-    priceGuest: number;
-    priceBusiness: number;
-    plane: { aircraftType: string };
-  };
+  trip: FullTripInfo;
   passengers: PassengerInfo[];
+  payment: PaymentSummary | null;
+  // Present only for round-trip bookings.
+  linkedBooking: {
+    id: number;
+    seatClass: "GUEST" | "BUSINESS";
+    trip: FullTripInfo;
+    passengers: PassengerInfo[];
+    payment: PaymentSummary | null;
+  } | null;
 };
+
+type MergedService = {
+  key: string;
+  label: string;
+  unitPrice: number;
+  count: number;
+  total: number;
+};
+
+function mergeServices(requests: SpecialRequest[]): MergedService[] {
+  const groups = new Map<string, MergedService>();
+
+  for (const r of requests) {
+    const key = `${r.requestType}::${r.price}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.total += r.price;
+    } else {
+      groups.set(key, {
+        key,
+        label: r.requestType,
+        unitPrice: r.price,
+        count: 1,
+        total: r.price,
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
 
 function InvoiceContent() {
   const params = useParams();
@@ -73,8 +120,59 @@ function InvoiceContent() {
     fetchBooking();
   }, [bookingId]);
 
+  const returnLeg = booking?.linkedBooking ?? null;
+  const isRoundTrip = !!returnLeg;
+
+  const outboundClassPrice = booking
+    ? booking.seatClass === "BUSINESS"
+      ? booking.trip.priceBusiness
+      : booking.trip.priceGuest
+    : 0;
+  const outboundFare = booking ? outboundClassPrice * booking.passengers.length : 0;
+
+  const returnClassPrice = returnLeg
+    ? returnLeg.seatClass === "BUSINESS"
+      ? returnLeg.trip.priceBusiness
+      : returnLeg.trip.priceGuest
+    : 0;
+  const returnFare = returnLeg && booking ? returnClassPrice * booking.passengers.length : 0;
+
+  // The discount tiers now live in the database, so the discounted seat
+  // total can no longer be computed locally — it's fetched from the same
+  // /api/pricing/preview endpoint used by the booking page.
+  const [seatsDiscounted, setSeatsDiscounted] = useState<number | null>(null);
+  const [pricingError, setPricingError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!isRoundTrip || !booking) {
+      return;
+    }
+
+    async function loadDiscount() {
+      try {
+        const res = await fetch("/api/pricing/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ outboundFare, returnFare }),
+        });
+        if (!res.ok) {
+          throw new Error("Failed to fetch pricing preview");
+        }
+        const data = await res.json();
+        setSeatsDiscounted(data.discounted);
+      } catch (err) {
+        setPricingError(err instanceof Error ? err : new Error("Unknown error"));
+      }
+    }
+
+    loadDiscount();
+  }, [isRoundTrip, booking, outboundFare, returnFare]);
+
   if (fetchError) {
     throw fetchError;
+  }
+  if (pricingError) {
+    throw pricingError;
   }
 
   if (notFound) {
@@ -85,21 +183,45 @@ function InvoiceContent() {
     );
   }
 
-  if (!booking) {
+  // Not ready to render until the booking is loaded, and — for round
+  // trips — until the discounted price has come back too.
+  if (!booking || (isRoundTrip && seatsDiscounted === null)) {
     return null; // loading.tsx handles this
   }
 
-  const classPrice =
-    booking.seatClass === "BUSINESS" ? booking.trip.priceBusiness : booking.trip.priceGuest;
+  // Shown as ONE combined seat price (outbound + return together), not two
+  // separate lines — the split by leg isn't useful to the traveler, only
+  // the round-trip total (and the discount applied to it) matters.
+  const seatPricePerTraveler = outboundClassPrice + returnClassPrice;
+  const seatsOriginal = outboundFare + returnFare;
+  const seatsFinal = isRoundTrip ? seatsDiscounted! : seatsOriginal;
+  const seatsSavings = seatsOriginal - seatsFinal;
 
-  const seatsSubtotal = classPrice * booking.passengers.length;
+  // Passengers are created once per leg, in the same order (see
+  // checkout/route.ts) — so index i on the outbound leg is the same
+  // traveler as index i on the return leg. Combine their services here
+  // to get each traveler's true total across both flights.
+  function servicesForTraveler(index: number): SpecialRequest[] {
+    const outboundServices = booking!.passengers[index]?.specialRequests || [];
+    const returnServices = returnLeg?.passengers[index]?.specialRequests || [];
+    return [...outboundServices, ...returnServices];
+  }
 
   const servicesSubtotal = booking.passengers.reduce(
-    (sum, p) => sum + p.specialRequests.reduce((s, r) => s + r.price, 0),
+    (sum, _p, index) =>
+      sum + servicesForTraveler(index).reduce((s, r) => s + r.price, 0),
     0
   );
 
-  const total = seatsSubtotal + servicesSubtotal;
+  // The authoritative amount always comes from the Payment row — it's the
+  // only place the round-trip discount is actually applied (see
+  // checkout/route.ts). A round-trip's return leg has no Payment of its
+  // own, so we fall back to the linked (outbound) leg's Payment.
+  const effectivePayment = booking.payment ?? returnLeg?.payment ?? null;
+
+  // Fallback for the rare case the invoice is viewed before checkout has
+  // run yet (no Payment created) — matches the previous One-Way behavior.
+  const total = effectivePayment?.amount ?? seatsFinal + servicesSubtotal;
 
   async function handlePayment() {
     const res = await fetch(`/api/bookings/${bookingId}/pay`, { method: "POST" });
@@ -119,18 +241,30 @@ function InvoiceContent() {
             BOOKING #{booking.id}
           </p>
           <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Booking Invoice</h1>
+
           <p className="mt-1 text-sm text-[#DCEEFF]">
+            {returnLeg ? "Outbound: " : ""}
             {booking.trip.departingPlace} to {booking.trip.destination} —{" "}
             {new Date(booking.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
             {booking.trip.plane.aircraftType}
           </p>
+
+          {returnLeg && (
+            <p className="mt-1 text-sm text-[#DCEEFF]">
+              Return: {returnLeg.trip.departingPlace} to {returnLeg.trip.destination} —{" "}
+              {new Date(returnLeg.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
+              {returnLeg.trip.plane.aircraftType}
+            </p>
+          )}
         </div>
       </section>
 
       <section className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-4xl space-y-6">
           {booking.passengers.map((passenger, index) => {
-            const servicesTotal = passenger.specialRequests.reduce((s, r) => s + r.price, 0);
+            const mergedServices = mergeServices(servicesForTraveler(index));
+            const servicesTotal = mergedServices.reduce((s, m) => s + m.total, 0);
+            const passengerTotal = seatPricePerTraveler + servicesTotal;
             return (
               <div
                 key={passenger.id}
@@ -154,15 +288,21 @@ function InvoiceContent() {
                   <div className="flex justify-between text-sm">
                     <span className="text-[#5C7A96]">
                       {booking.seatClass === "BUSINESS" ? "Business" : "Guest"} class seat
+                      {isRoundTrip ? " (round trip)" : ""}
                     </span>
-                    <span className="font-medium text-[#16324F]">{classPrice} TND</span>
+                    <span className="font-medium text-[#16324F]">
+                      {seatPricePerTraveler.toFixed(2)} TND
+                    </span>
                   </div>
 
-                  {passenger.specialRequests.map((service) => (
-                    <div key={service.id} className="flex justify-between text-sm">
-                      <span className="text-[#5C7A96]">{service.requestType}</span>
+                  {mergedServices.map((service) => (
+                    <div key={service.key} className="flex justify-between text-sm">
+                      <span className="text-[#5C7A96]">
+                        {service.label}
+                        {service.count > 1 ? ` x${service.count}` : ""}
+                      </span>
                       <span className="font-medium text-[#16324F]">
-                        {service.price === 0 ? "Free" : `${service.price} TND`}
+                        {service.total === 0 ? "Free" : `${service.total.toFixed(2)} TND`}
                       </span>
                     </div>
                   ))}
@@ -170,7 +310,7 @@ function InvoiceContent() {
 
                 <div className="mt-3 flex justify-between border-t border-[#DCEEFF] pt-3 text-sm font-semibold">
                   <span className="text-[#16324F]">Passenger total</span>
-                  <span className="text-[#16324F]">{classPrice + servicesTotal} TND</span>
+                  <span className="text-[#16324F]">{passengerTotal.toFixed(2)} TND</span>
                 </div>
               </div>
             );
@@ -178,16 +318,39 @@ function InvoiceContent() {
 
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
             <div className="flex justify-between text-sm text-[#5C7A96]">
-              <span>Seats ({booking.passengers.length})</span>
-              <span>{seatsSubtotal} TND</span>
+              <span>Seats ({booking.passengers.length}){returnLeg ? " — round trip" : ""}</span>
+              <div className="text-right">
+                {isRoundTrip && seatsSavings > 0 ? (
+                  <>
+                    <span className="text-[#9DB6CF] line-through">{seatsOriginal.toFixed(2)} TND</span>
+                    <span className="ml-2 font-medium text-[#16324F]">
+                      {seatsFinal.toFixed(2)} TND
+                    </span>
+                  </>
+                ) : (
+                  <span>{seatsOriginal.toFixed(2)} TND</span>
+                )}
+              </div>
             </div>
+            {isRoundTrip && seatsSavings > 0 && (
+              <div className="mt-1 flex justify-end text-xs font-medium text-emerald-600">
+                You saved {seatsSavings.toFixed(2)} TND on fares
+              </div>
+            )}
             <div className="mt-2 flex justify-between text-sm text-[#5C7A96]">
-              <span>Services</span>
-              <span>{servicesSubtotal} TND</span>
+              <span>Services{returnLeg ? " — both flights" : ""}</span>
+              <span>{servicesSubtotal.toFixed(2)} TND</span>
             </div>
-            <div className="mt-3 flex justify-between border-t border-[#DCEEFF] pt-3 text-xl font-bold text-[#16324F]">
+            <div className="mt-3 flex items-start justify-between border-t border-[#DCEEFF] pt-3 text-xl font-bold text-[#16324F]">
               <span>Total</span>
-              <span>{total} TND</span>
+              <div className="text-right">
+                <span>{total.toFixed(2)} TND</span>
+                {returnLeg && effectivePayment && (
+                  <p className="mt-0.5 text-xs font-normal text-[#5C7A96]">
+                    Round-trip fare discount already applied to seats
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 

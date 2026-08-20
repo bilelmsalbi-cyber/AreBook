@@ -1,16 +1,16 @@
 "use client";
 
-import { Suspense, useState } from "react";import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   PassengerForm,
   SelectedService,
   passengersStorageKey,
 } from "@/types/passenger";
+import PlaneLoader from "@/components/PlaneLoader";
 
-const BAG_PRICE = 50;
-const MAX_BAGS = 3;
-const MEAL_PRICE = 20;
-const PET_PRICE_PER_KG = 23;
+type ServicePriceInfo = { label: string; price: number; maxQuantity: number | null };
+type ServicePricesResponse = Record<"WHEELCHAIR" | "MEAL" | "BAGGAGE" | "PET", ServicePriceInfo>;
 
 function ServicesContent() {
   const params = useParams();
@@ -21,6 +21,31 @@ function ServicesContent() {
   const passengerIndex = parseInt(params.passengerIndex as string, 10);
   const adults = searchParams.get("adults") || "1";
   const children = searchParams.get("children") || "0";
+
+  // Prices now live in the database — fetched once on mount instead of
+  // imported as static constants, so admin changes take effect immediately.
+  const [prices, setPrices] = useState<ServicePricesResponse | null>(null);
+  const [fetchError, setFetchError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    async function fetchPrices() {
+      try {
+        const res = await fetch("/api/pricing/services");
+        if (!res.ok) {
+          throw new Error(`Failed to fetch service prices (status ${res.status})`);
+        }
+        const data = await res.json();
+        setPrices(data);
+      } catch (err) {
+        setFetchError(err instanceof Error ? err : new Error("Unknown error"));
+      }
+    }
+    fetchPrices();
+  }, []);
+
+  if (fetchError) {
+    throw fetchError;
+  }
 
   function getExistingServices(): SelectedService[] {
     const stored = sessionStorage.getItem(passengersStorageKey(bookingId));
@@ -50,21 +75,36 @@ function ServicesContent() {
   );
   const [petSelected, setPetSelected] = useState(() => !!existingPet);
 
+  // Not ready to render the form until prices have loaded — every price
+  // shown below depends on them.
+  if (!prices) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF]">
+        <PlaneLoader />
+      </main>
+    );
+  }
+
+  const BAG_PRICE = prices.BAGGAGE.price;
+  const MAX_BAGS = prices.BAGGAGE.maxQuantity ?? 3;
+  const MEAL_PRICE = prices.MEAL.price;
+  const PET_PRICE_PER_KG = prices.PET.price;
+
   const petPrice = petType && petWeight ? parseFloat(petWeight) * PET_PRICE_PER_KG : 0;
 
   function handleAddServices() {
     const services: SelectedService[] = [];
 
     if (wheelchair) {
-      services.push({ type: "WHEELCHAIR", label: "Wheelchair Assistance", price: 0 });
+      services.push({ type: "WHEELCHAIR", label: prices!.WHEELCHAIR.label, price: 0 });
     }
     if (meal) {
-      services.push({ type: "MEAL", label: "Special Meal (Gluten-Free)", price: MEAL_PRICE });
+      services.push({ type: "MEAL", label: prices!.MEAL.label, price: MEAL_PRICE });
     }
     if (bagCount > 0) {
       services.push({
         type: "BAGGAGE",
-        label: `Extra Baggage x${bagCount}`,
+        label: `${prices!.BAGGAGE.label} x${bagCount}`,
         price: bagCount * BAG_PRICE,
         quantity: bagCount,
       });
@@ -73,7 +113,7 @@ function ServicesContent() {
       const w = parseFloat(petWeight);
       services.push({
         type: "PET",
-        label: `Pet Travel (${petType}, ${w}kg)`,
+        label: `${prices!.PET.label} (${petType}, ${w}kg)`,
         price: w * PET_PRICE_PER_KG,
         petType,
         petWeight: w,

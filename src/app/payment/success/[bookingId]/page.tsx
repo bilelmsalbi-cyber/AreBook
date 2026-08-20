@@ -4,18 +4,25 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
+type TripInfo = {
+  departingPlace: string;
+  destination: string;
+  departureDateTime: string;
+  plane: { aircraftType: string };
+};
+
 type BookingStatus = {
   id: number;
   status: string;
   pnr: string | null;
   tripType: string;
-  trip: {
-    departingPlace: string;
-    destination: string;
-    departureDateTime: string;
-    plane: { aircraftType: string };
-  };
+  trip: TripInfo;
   passengers: { person: { firstName: string; lastName: string } }[];
+  // Present only for round-trip bookings. Carries no pnr of its own —
+  // the pair shares the outbound leg's pnr (see webhooks/stripe/route.ts).
+  linkedBooking: {
+    trip: TripInfo;
+  } | null;
 };
 
 function SuccessContent() {
@@ -35,8 +42,12 @@ function SuccessContent() {
       const data = await res.json();
       if (cancelled) return;
 
-      if (data.status === "CONFIRMED" && data.pnr) {
-        setBooking(data);
+      // A round-trip's return leg has no pnr of its own — resolve it via
+      // the linked (outbound) leg, same as everywhere else in the app.
+      const resolvedPnr = data.pnr ?? data.linkedBooking?.pnr ?? null;
+
+      if (data.status === "CONFIRMED" && resolvedPnr) {
+        setBooking({ ...data, pnr: resolvedPnr });
       } else if (attempts < maxAttempts) {
         setTimeout(() => setAttempts((a) => a + 1), 1500);
       }
@@ -56,6 +67,8 @@ function SuccessContent() {
     );
   }
 
+  const returnLeg = booking.linkedBooking;
+
   return (
     <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
       <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-10 md:px-12">
@@ -70,14 +83,17 @@ function SuccessContent() {
       <section className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-md space-y-6">
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-8 text-center shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
-            <p className="text-xs uppercase tracking-widest text-[#5C7A96]">Booking Reference (PNR)</p>
+            <p className="text-xs uppercase tracking-widest text-[#5C7A96]">
+              Booking Reference (PNR)
+              {returnLeg && " — covers both flights"}
+            </p>
             <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-[#2563EB]">
               {booking.pnr}
             </p>
             <p className="mt-3 text-xs text-[#5C7A96]">
               Present this code at the airport check-in counter.
             </p>
-            
+
             <p className="mt-3 text-xs text-[#5C7A96]">
               We have sent a confirmation email to your inbox.
             </p>
@@ -85,12 +101,26 @@ function SuccessContent() {
 
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
             <p className="text-sm font-semibold text-[#16324F]">
+              {returnLeg ? "Outbound: " : ""}
               {booking.trip.departingPlace} → {booking.trip.destination}
             </p>
             <p className="mt-1 text-sm text-[#5C7A96]">
               {new Date(booking.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
               {booking.trip.plane.aircraftType}
             </p>
+
+            {returnLeg && (
+              <>
+                <p className="mt-3 text-sm font-semibold text-[#16324F]">
+                  Return: {returnLeg.trip.departingPlace} → {returnLeg.trip.destination}
+                </p>
+                <p className="mt-1 text-sm text-[#5C7A96]">
+                  {new Date(returnLeg.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
+                  {returnLeg.trip.plane.aircraftType}
+                </p>
+              </>
+            )}
+
             <div className="mt-4 space-y-1 border-t border-[#DCEEFF] pt-4">
               {booking.passengers.map((p, i) => (
                 <p key={i} className="text-sm text-[#16324F]">

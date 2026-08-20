@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 
-export default function UserMenu() {
+export default function UserMenu({ transparent = false }: { transparent?: boolean }) {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -29,13 +29,21 @@ export default function UserMenu() {
       <div className="flex items-center gap-3">
         <Link
           href="/login"
-          className="rounded-xl border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+          className={
+            transparent
+              ? "rounded-xl border border-white/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10"
+              : "rounded-xl border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+          }
         >
           Log in
         </Link>
         <Link
           href="/signup"
-          className="rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          className={
+            transparent
+              ? "rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+              : "rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          }
         >
           Create Account
         </Link>
@@ -51,12 +59,22 @@ export default function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-[#EAF4FF]"
+        className={
+          transparent
+            ? "flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-white/10"
+            : "flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-[#EAF4FF]"
+        }
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-r from-[#2563EB] to-[#3B82F6] text-sm font-semibold text-white">
           {initial}
         </span>
-        <span className="hidden text-sm font-medium text-[#16324F] md:inline">
+        <span
+          className={
+            transparent
+              ? "hidden text-sm font-medium text-white [text-shadow:0_1px_4px_rgba(11,30,61,0.6)] md:inline"
+              : "hidden text-sm font-medium text-[#16324F] md:inline"
+          }
+        >
           {name}
         </span>
       </button>

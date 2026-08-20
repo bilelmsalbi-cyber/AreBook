@@ -109,15 +109,17 @@ model Booking {
   seatsHeld         Int
   expiresAt         DateTime?
 
-  pnr               String?       @unique   // 
-  stripeSessionId   String?       @unique   // 
+  pnr               String?       @unique
+  stripeSessionId   String?       @unique
 
   linkedBookingId   Int?          @unique
   linkedBooking     Booking?      @relation("BookingLink", fields: [linkedBookingId], references: [id])
   linkedFromBooking Booking?      @relation("BookingLink")
 
+  paymentId         Int?
+  payment           Payment?      @relation(fields: [paymentId], references: [id])
+
   passengers        Passenger[]
-  payment           Payment?
 
   @@map("bookings")
 }
@@ -159,13 +161,44 @@ model SpecialRequest {
 
 model Payment {
   id          Int           @id @default(autoincrement())
-  bookingId   Int           @unique
   amount      Float
   status      PaymentStatus @default(PENDING)
   paymentDate DateTime?
-  booking     Booking       @relation(fields: [bookingId], references: [id])
+  bookings    Booking[]
 
   @@map("payments")
+}
+
+model ServicePrice {
+  id          Int      @id @default(autoincrement())
+  serviceType String   @unique
+  label       String
+  price       Float
+  maxQuantity Int?
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_prices")
+}
+
+model RoundTripDiscountTier {
+  id              Int      @id @default(autoincrement())
+  minTotal        Float
+  maxTotal        Float?
+  discountPercent Float
+  updatedAt       DateTime @updatedAt
+
+  @@map("round_trip_discount_tiers")
+}
+
+model CancellationTier {
+  id                       Int      @id @default(autoincrement())
+  minHoursBefore           Float
+  maxHoursBefore           Float?
+  businessDeductionPercent Float
+  guestDeductionPercent    Float
+  updatedAt                DateTime @updatedAt
+
+  @@map("cancellation_tiers")
 }
 
 enum AdminRole {
