@@ -1,3 +1,7 @@
+// Shared validation helpers for pricing config forms. Applied server-side
+// on every mutation — the UI's own input constraints (min="0", etc.) are
+// a convenience layer only, not a security boundary (defense in depth).
+
 export class ValidationError extends Error {}
 
 export function validateNonNegativeNumber(value: unknown, fieldName: string): number {
@@ -33,24 +37,13 @@ export function validateOptionalPositiveInt(value: unknown, fieldName: string): 
   return num;
 }
 
-// Ensures a single tier's own range is coherent: max (if set) must exceed min.
-export function validateTierRange(
-  min: number,
-  max: number | null,
-  minFieldName: string,
-  maxFieldName: string
-) {
-  if (max !== null && max <= min) {
-    throw new ValidationError(`${maxFieldName} must be greater than ${minFieldName}.`);
-  }
-}
-
 // Validates a full ordered set of tiers as ONE unit: must start at 0, end
 // with exactly one open-ended (max === null) tier, and have zero gap /
 // zero overlap between consecutive tiers — current.max must equal
-// next.min exactly. Called after every mutation (create/update/delete) on
-// a tier list, using the FULL resulting set (not just the row being
-// changed), because gaps/overlaps are a property of the whole set.
+// next.min exactly. Called once on the FULL proposed set at save time
+// (bulk replace), not after each individual add/edit/remove — the set is
+// only meaningful as a whole, so intermediate states while the admin is
+// still editing are allowed to be temporarily invalid.
 export function validateTierSetIntegrity(tiers: { min: number; max: number | null }[]) {
   const sorted = [...tiers].sort((a, b) => a.min - b.min);
 

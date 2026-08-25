@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 type SpecialRequest = {
   id: number;
@@ -92,7 +92,12 @@ function mergeServices(requests: SpecialRequest[]): MergedService[] {
 
 function InvoiceContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const bookingId = params.bookingId as string;
+  // Guest access token carried forward from the booking flow (see
+  // api/bookings/route.ts and api/bookings/[id]/route.ts) — required to
+  // view this booking before it's linked to any session.
+  const token = searchParams.get("token") || "";
 
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -101,7 +106,7 @@ function InvoiceContent() {
   useEffect(() => {
     async function fetchBooking() {
       try {
-        const res = await fetch(`/api/bookings/${bookingId}`);
+        const res = await fetch(`/api/bookings/${bookingId}?token=${token}`);
 
         if (res.status === 404) {
           setNotFound(true);
@@ -118,7 +123,7 @@ function InvoiceContent() {
       }
     }
     fetchBooking();
-  }, [bookingId]);
+  }, [bookingId, token]);
 
   const returnLeg = booking?.linkedBooking ?? null;
   const isRoundTrip = !!returnLeg;

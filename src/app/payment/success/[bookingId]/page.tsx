@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type TripInfo = {
@@ -27,7 +27,12 @@ type BookingStatus = {
 
 function SuccessContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const bookingId = params.bookingId as string;
+  // Guest access token forwarded all the way from pay/route.ts's Stripe
+  // success_url — required to view this booking before it's linked to
+  // any session (see api/bookings/[id]/route.ts).
+  const token = searchParams.get("token") || "";
 
   const [booking, setBooking] = useState<BookingStatus | null>(null);
   const [attempts, setAttempts] = useState(0);
@@ -37,7 +42,7 @@ function SuccessContent() {
     let cancelled = false;
 
     async function poll() {
-      const res = await fetch(`/api/bookings/${bookingId}`);
+      const res = await fetch(`/api/bookings/${bookingId}?token=${token}`);
       if (!res.ok) return;
       const data = await res.json();
       if (cancelled) return;
@@ -57,7 +62,7 @@ function SuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [bookingId, attempts]);
+  }, [bookingId, token, attempts]);
 
   if (!booking) {
     return (
@@ -131,7 +136,7 @@ function SuccessContent() {
           </div>
 
           <Link
-            href={`/invoice/${bookingId}`}
+            href={`/invoice/${bookingId}?token=${token}`}
             className="block w-full rounded-xl border border-[#2563EB] py-3 text-center text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
           >
             View Full Invoice

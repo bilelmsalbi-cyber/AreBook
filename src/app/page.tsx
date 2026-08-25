@@ -3,13 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import MyBookingsPanel from "@/components/MyBookingsPanel";
 
 type TripType = "ONE_WAY" | "ROUND_TRIP";
+type ActiveTab = "booking" | "manage";
 
 export default function Home() {
   //
   // throw new Error("Testing error page");
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>("booking");
 
   const [tripType, setTripType] = useState<TripType>("ONE_WAY");
   const [departingPlace, setDepartingPlace] = useState("");
@@ -103,117 +107,149 @@ export default function Home() {
         }}
       />
 
-      {/* ==================== Search Form ==================== */}
+      {/* ==================== Booking / Manage Card ==================== */}
       <section className="relative px-6 pb-16 md:px-12">
         <div className="mx-auto max-w-5xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)] md:p-8">
-          <fieldset className="mb-6 flex gap-6">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="radio"
-                name="tripType"
-                checked={tripType === "ONE_WAY"}
-                onChange={() => setTripType("ONE_WAY")}
-                className="h-4 w-4 accent-[#2563EB]"
-              />
-              <span className="text-sm text-[#16324F]">One Way</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="radio"
-                name="tripType"
-                checked={tripType === "ROUND_TRIP"}
-                onChange={() => setTripType("ROUND_TRIP")}
-                className="h-4 w-4 accent-[#2563EB]"
-              />
-              <span className="text-sm text-[#16324F]">Round Trip</span>
-            </label>
-          </fieldset>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                From
-              </label>
-              <input
-                type="text"
-                value={departingPlace}
-                onChange={(e) => setDepartingPlace(e.target.value)}
-                placeholder="Tunis"
-                className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                To
-              </label>
-              <input
-                type="text"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="Paris"
-                className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
-              />
-            </div>
+          {/* Tab bar — stays fixed regardless of which panel is shown below */}
+          <div className="mb-6 flex gap-2 border-b border-[#DCEEFF]">
+            <button
+              type="button"
+              onClick={() => setActiveTab("booking")}
+              className={`px-4 py-3 text-sm font-semibold transition-colors duration-200 ${
+                activeTab === "booking"
+                  ? "border-b-2 border-[#2563EB] text-[#2563EB]"
+                  : "text-[#5C7A96] hover:text-[#16324F]"
+              }`}
+            >
+              Booking
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("manage")}
+              className={`px-4 py-3 text-sm font-semibold transition-colors duration-200 ${
+                activeTab === "manage"
+                  ? "border-b-2 border-[#2563EB] text-[#2563EB]"
+                  : "text-[#5C7A96] hover:text-[#16324F]"
+              }`}
+            >
+              Manage
+            </button>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                Departure Date
-              </label>
-              <input
-                type="date"
-                value={departureDate}
-                onChange={(e) => setDepartureDate(e.target.value)}
-                className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
-              />
-            </div>
-            {tripType === "ROUND_TRIP" && (
-              <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                  Return Date
+          {activeTab === "booking" ? (
+            <>
+              <fieldset className="mb-6 flex gap-6">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tripType"
+                    checked={tripType === "ONE_WAY"}
+                    onChange={() => setTripType("ONE_WAY")}
+                    className="h-4 w-4 accent-[#2563EB]"
+                  />
+                  <span className="text-sm text-[#16324F]">One Way</span>
                 </label>
-                <input
-                  type="date"
-                  value={returnDate}
-                  onChange={(e) => setReturnDate(e.target.value)}
-                  className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="tripType"
+                    checked={tripType === "ROUND_TRIP"}
+                    onChange={() => setTripType("ROUND_TRIP")}
+                    className="h-4 w-4 accent-[#2563EB]"
+                  />
+                  <span className="text-sm text-[#16324F]">Round Trip</span>
+                </label>
+              </fieldset>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                    From
+                  </label>
+                  <input
+                    type="text"
+                    value={departingPlace}
+                    onChange={(e) => setDepartingPlace(e.target.value)}
+                    placeholder="Tunis"
+                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                    To
+                  </label>
+                  <input
+                    type="text"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    placeholder="Paris"
+                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                    Departure Date
+                  </label>
+                  <input
+                    type="date"
+                    value={departureDate}
+                    onChange={(e) => setDepartureDate(e.target.value)}
+                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                  />
+                </div>
+                {tripType === "ROUND_TRIP" && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                      Return Date
+                    </label>
+                    <input
+                      type="date"
+                      value={returnDate}
+                      onChange={(e) => setReturnDate(e.target.value)}
+                      className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <PassengerCounter
+                  label="Adults (12+)"
+                  value={adults}
+                  onDecrease={() => setAdults((n) => Math.max(1, n - 1))}
+                  onIncrease={() => setAdults((n) => n + 1)}
+                />
+                <PassengerCounter
+                  label="Children (2-11)"
+                  value={children}
+                  onDecrease={() => setChildren((n) => Math.max(0, n - 1))}
+                  onIncrease={() => setChildren((n) => n + 1)}
+                />
+                <PassengerCounter
+                  label="Infants (<2)"
+                  value={infants}
+                  onDecrease={() => setInfants((n) => Math.max(0, n - 1))}
+                  onIncrease={() => setInfants((n) => n + 1)}
                 />
               </div>
-            )}
-          </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <PassengerCounter
-              label="Adults (12+)"
-              value={adults}
-              onDecrease={() => setAdults((n) => Math.max(1, n - 1))}
-              onIncrease={() => setAdults((n) => n + 1)}
-            />
-            <PassengerCounter
-              label="Children (2-11)"
-              value={children}
-              onDecrease={() => setChildren((n) => Math.max(0, n - 1))}
-              onIncrease={() => setChildren((n) => n + 1)}
-            />
-            <PassengerCounter
-              label="Infants (<2)"
-              value={infants}
-              onDecrease={() => setInfants((n) => Math.max(0, n - 1))}
-              onIncrease={() => setInfants((n) => n + 1)}
-            />
-          </div>
+              {validationError && (
+                <p className="mt-4 text-sm text-red-500">{validationError}</p>
+              )}
 
-          {validationError && (
-            <p className="mt-4 text-sm text-red-500">{validationError}</p>
+              <button
+                onClick={handleSearch}
+                className="mt-6 w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:from-[#1D4ED8] hover:to-[#2563EB] hover:shadow-xl"
+              >
+                {`Search Flights - ${totalPassengers} passenger(s)`}
+              </button>
+            </>
+          ) : (
+            <MyBookingsPanel />
           )}
-
-          <button
-            onClick={handleSearch}
-            className="mt-6 w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:from-[#1D4ED8] hover:to-[#2563EB] hover:shadow-xl"
-          >
-            {`Search Flights - ${totalPassengers} passenger(s)`}
-          </button>
         </div>
       </section>
     </main>

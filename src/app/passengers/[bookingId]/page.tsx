@@ -30,6 +30,11 @@ function PassengersContent() {
   const adults = parseInt(searchParams.get("adults") || "1", 10);
   const children = parseInt(searchParams.get("children") || "0", 10);
   const seatsNeeded = adults + children;
+  // Guest access token from the booking flow (see api/bookings/route.ts
+  // and api/bookings/[id]/route.ts) — required to view this booking
+  // before it's linked to any session or has a pnr yet. Carried forward
+  // to every subsequent step (services, invoice) below.
+  const token = searchParams.get("token") || "";
 
   // Round-trip summary (outbound + return), shown at the top of the page
   // so the traveler knows the passenger info they enter covers both legs.
@@ -37,13 +42,13 @@ function PassengersContent() {
 
   useEffect(() => {
     async function fetchBooking() {
-      const res = await fetch(`/api/bookings/${bookingId}`);
+      const res = await fetch(`/api/bookings/${bookingId}?token=${token}`);
       if (!res.ok) return; // non-fatal: the form still works without the summary
       const data = await res.json();
       setBooking(data);
     }
     fetchBooking();
-  }, [bookingId]);
+  }, [bookingId, token]);
 
   const isRoundTrip = !!booking?.linkedBooking;
 
@@ -84,7 +89,7 @@ function PassengersContent() {
     alert(data.error || "Something went wrong.");
     return;
   }
-  router.push(`/invoice/${bookingId}`);
+  router.push(`/invoice/${bookingId}?token=${token}`);
 }
 
   function updatePassenger(index: number, field: keyof PassengerForm, value: string | boolean) {
@@ -95,7 +100,7 @@ function PassengersContent() {
 
   function goToServices(index: number) {
     router.push(
-      `/services/${bookingId}/${index}?adults=${adults}&children=${children}`
+      `/services/${bookingId}/${index}?adults=${adults}&children=${children}&token=${token}`
     );
   }
 

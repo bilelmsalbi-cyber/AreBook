@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { isRateLimited, cleanupOldBuckets } from "@/lib/rateLimit";
+import { auth } from "@/lib/auth";
 
 const HOLD_MINUTES = 7;
 
@@ -47,6 +49,76 @@ async function checkSeatAvailability(
   return { ok: true as const, trip };
 }
 
+// ---------------------------------------------------------------------
+// GET /api/bookings
+// "My Bookings" for a logged-in customer — see the note near the top of
+// this file: unrelated to accessToken, unchanged from before.
+// ---------------------------------------------------------------------
+
+export async function GET() {
+  const session = await auth();
+  const customerId = session?.user?.customerId
+    ? parseInt(session.user.customerId, 10)
+    : null;
+
+  if (!customerId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const raw = await prisma.booking.findMany({
+    where: {
+      customerId,
+      status: "CONFIRMED",
+      trip: { departureDateTime: { gte: new Date() } },
+    },
+    include: {
+      trip: {
+        select: {
+          id: true,
+          departingPlace: true,
+          destination: true,
+          departureDateTime: true,
+          arrivalDateTime: true,
+          plane: { select: { aircraftType: true } },
+        },
+      },
+      passengers: {
+        select: { person: { select: { firstName: true, lastName: true } } },
+      },
+      payment: { select: { status: true, amount: true } },
+      linkedBooking: {
+        select: {
+          id: true,
+          trip: {
+            select: {
+              id: true,
+              departingPlace: true,
+              destination: true,
+              departureDateTime: true,
+              arrivalDateTime: true,
+              plane: { select: { aircraftType: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { trip: { departureDateTime: "asc" } },
+  });
+
+  const targetIds = new Set(
+    raw.filter((b) => b.linkedBookingId).map((b) => b.linkedBookingId as number)
+  );
+
+  const bookings = raw
+    .filter((b) => !targetIds.has(b.id))
+    .map((b) => ({
+      ...b,
+      returnTrip: b.linkedBooking ? b.linkedBooking.trip : null,
+    }));
+
+  return NextResponse.json({ bookings });
+}
+
 export async function POST(request: NextRequest) {
   try {
     // ---- Rate limiting (abuse protection) ----
@@ -59,6 +131,16 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
+
+    // If the person is logged in, the booking is owned by them from the
+    // moment it's created — not just after payment. This lets an
+    // interrupted (PENDING) booking still show up under "My Bookings".
+    // Both legs of a round trip are stamped with the same customerId
+    // below; ownership is separate from which leg holds the pnr/payment.
+    const session = await auth();
+    const customerId = session?.user?.customerId
+      ? parseInt(session.user.customerId, 10)
+      : undefined;
 
     const body = await request.json();
     const { tripType, seatClass, adults, children } = body;
@@ -109,6 +191,13 @@ export async function POST(request: NextRequest) {
       // it must live on the outbound row, not the return row — otherwise
       // `outboundBooking.linkedBooking` resolves to null everywhere
       // downstream (this was a real bug, now fixed).
+      //
+      // accessToken: only the OUTBOUND leg gets one, since that's the
+      // only id ever exposed in URLs during the booking flow (passengers,
+      // invoice). It lets a guest — not logged in yet, no pnr yet either
+      // (that's only generated on payment) — view and continue their own
+      // booking via a link, without exposing every booking by guessable
+      // sequential id.
       const { outboundBooking, returnBooking } = await prisma.$transaction(async (tx) => {
         const returnBooking = await tx.booking.create({
           data: {
@@ -118,6 +207,7 @@ export async function POST(request: NextRequest) {
             seatsHeld: seatsNeeded,
             status: "PENDING",
             expiresAt,
+            customerId,
           },
         });
 
@@ -130,6 +220,8 @@ export async function POST(request: NextRequest) {
             status: "PENDING",
             expiresAt,
             linkedBookingId: returnBooking.id,
+            customerId,
+            accessToken: randomUUID(),
           },
         });
 
@@ -142,7 +234,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ---- One-way (unchanged behavior) ----
+    // ---- One-way (unchanged behavior, now with customerId + accessToken) ----
     const { tripId } = body;
 
     const check = await checkSeatAvailability(tripId, seatClass, seatsNeeded);
@@ -160,6 +252,8 @@ export async function POST(request: NextRequest) {
         seatsHeld: seatsNeeded,
         status: "PENDING",
         expiresAt,
+        customerId,
+        accessToken: randomUUID(),
       },
     });
 

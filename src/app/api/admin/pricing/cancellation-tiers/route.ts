@@ -6,7 +6,6 @@ import {
   validateNonNegativeNumber,
   validateOptionalNonNegative,
   validatePercent,
-  validateTierRange,
   validateTierSetIntegrity,
   ValidationError,
 } from "@/lib/pricing/validation";
@@ -24,10 +23,12 @@ export async function GET() {
   return NextResponse.json({ tiers });
 }
 
-// POST — create a new cancellation tier. ADMIN-only.
-// Validates the tier itself, then re-validates the WHOLE resulting set
-// (existing tiers + the new one) for gaps/overlaps before writing.
-export async function POST(request: NextRequest) {
+// PUT — bulk replace the entire tier set in one atomic operation. ADMIN-only.
+// Same rationale as discount-tiers/route.ts: tiers are only meaningful as
+// a whole set, so the client sends the full proposed list and this route
+// validates + writes it as a single transaction. Row ids are not
+// preserved across saves.
+export async function PUT(request: NextRequest) {
   const session = await adminAuth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,36 +38,48 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const minHoursBefore = validateNonNegativeNumber(body.minHoursBefore, "Minimum hours before");
-    const maxHoursBefore = validateOptionalNonNegative(body.maxHoursBefore, "Maximum hours before");
-    const businessDeductionPercent = validatePercent(
-      body.businessDeductionPercent,
-      "Business deduction percent"
-    );
-    const guestDeductionPercent = validatePercent(
-      body.guestDeductionPercent,
-      "Guest deduction percent"
-    );
+    const rawTiers = body.tiers;
 
-    validateTierRange(minHoursBefore, maxHoursBefore, "Minimum hours before", "Maximum hours before");
+    if (!Array.isArray(rawTiers)) {
+      return NextResponse.json({ error: "Expected a list of tiers." }, { status: 400 });
+    }
 
-    const existing = await prisma.cancellationTier.findMany();
-    const resultingSet = [
-      ...existing.map((t) => ({ min: t.minHoursBefore, max: t.maxHoursBefore })),
-      { min: minHoursBefore, max: maxHoursBefore },
-    ];
-    validateTierSetIntegrity(resultingSet);
-
-    const created = await prisma.cancellationTier.create({
-      data: { minHoursBefore, maxHoursBefore, businessDeductionPercent, guestDeductionPercent },
+    const validated = rawTiers.map((t, i) => {
+      const minHoursBefore = validateNonNegativeNumber(
+        t.minHoursBefore,
+        `Tier ${i + 1}: Minimum hours before`
+      );
+      const maxHoursBefore = validateOptionalNonNegative(
+        t.maxHoursBefore,
+        `Tier ${i + 1}: Maximum hours before`
+      );
+      const businessDeductionPercent = validatePercent(
+        t.businessDeductionPercent,
+        `Tier ${i + 1}: Business deduction percent`
+      );
+      const guestDeductionPercent = validatePercent(
+        t.guestDeductionPercent,
+        `Tier ${i + 1}: Guest deduction percent`
+      );
+      return { minHoursBefore, maxHoursBefore, businessDeductionPercent, guestDeductionPercent };
     });
 
-    return NextResponse.json({ tier: created }, { status: 201 });
+    validateTierSetIntegrity(
+      validated.map((t) => ({ min: t.minHoursBefore, max: t.maxHoursBefore }))
+    );
+
+    const saved = await prisma.$transaction(async (tx) => {
+      await tx.cancellationTier.deleteMany({});
+      await tx.cancellationTier.createMany({ data: validated });
+      return tx.cancellationTier.findMany({ orderBy: { minHoursBefore: "asc" } });
+    });
+
+    return NextResponse.json({ tiers: saved });
   } catch (error) {
     if (error instanceof ValidationError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    console.error("Create cancellation tier error:", error);
+    console.error("Save cancellation tiers error:", error);
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }
 }

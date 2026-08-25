@@ -21,6 +21,11 @@ function ServicesContent() {
   const passengerIndex = parseInt(params.passengerIndex as string, 10);
   const adults = searchParams.get("adults") || "1";
   const children = searchParams.get("children") || "0";
+  // Doesn't call the booking-detail endpoint itself, but must carry the
+  // token back to the passengers page when returning there (see
+  // handleAddServices below) — otherwise the guest would lose access on
+  // the way back.
+  const token = searchParams.get("token") || "";
 
   // Prices now live in the database — fetched once on mount instead of
   // imported as static constants, so admin changes take effect immediately.
@@ -125,7 +130,7 @@ function ServicesContent() {
     parsed[passengerIndex] = { ...parsed[passengerIndex], services };
     sessionStorage.setItem(passengersStorageKey(bookingId), JSON.stringify(parsed));
 
-    router.push(`/passengers/${bookingId}?adults=${adults}&children=${children}`);
+    router.push(`/passengers/${bookingId}?adults=${adults}&children=${children}&token=${token}`);
   }
 
   return (

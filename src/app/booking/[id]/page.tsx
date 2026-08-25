@@ -68,16 +68,11 @@ function BookingContent() {
   const isRoundTrip = tripType === "ROUND_TRIP";
   const outboundTripId = searchParams.get("outboundTripId") || "";
 
-  // In one-way mode, "trip" holds the only leg.
-  // In round-trip mode, "trip" holds the return leg and "outboundTrip"
-  // holds the outbound leg — both must be loaded before showing the page.
   const [trip, setTrip] = useState<Trip | null>(null);
   const [outboundTrip, setOutboundTrip] = useState<Trip | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [fetchError, setFetchError] = useState<Error | null>(null);
 
-  // Round-trip pricing (with the DB-driven discount applied) — fetched
-  // from the server, never computed locally in the browser.
   const [guestPricing, setGuestPricing] = useState<PricingPreview | null>(null);
   const [businessPricing, setBusinessPricing] = useState<PricingPreview | null>(null);
   const [pricingLoading, setPricingLoading] = useState(isRoundTrip);
@@ -127,9 +122,6 @@ function BookingContent() {
     fetchTrips();
   }, [returnTripId, outboundTripId, isRoundTrip]);
 
-  // Once both legs are loaded (round trip only), fetch the discounted
-  // price for both seat classes in parallel — the discount tiers now live
-  // in the database, so this can no longer be computed client-side.
   useEffect(() => {
     if (!isRoundTrip || !trip || !outboundTrip) {
       return;
@@ -160,7 +152,6 @@ function BookingContent() {
     loadPricing();
   }, [isRoundTrip, trip, outboundTrip, seatsNeeded]);
 
-  // Re-throw during render so Next.js's error.tsx boundary catches it
   if (fetchError) {
     throw fetchError;
   }
@@ -206,9 +197,16 @@ function BookingContent() {
     }
 
     // The outbound booking is always the primary one — passenger data
-    // and the linked return leg are managed from there.
-    const primaryBookingId = isRoundTrip ? data.outboundBooking.id : data.id;
-    router.push(`/passengers/${primaryBookingId}?adults=${adults}&children=${children}`);
+    // and the linked return leg are managed from there. Only it carries
+    // an accessToken (see api/bookings/route.ts), which we forward in the
+    // URL so this guest (not logged in, no pnr yet) can keep viewing
+    // their own booking through the rest of the flow.
+    const primaryBooking = isRoundTrip ? data.outboundBooking : data;
+    const primaryBookingId = primaryBooking.id;
+    const token = primaryBooking.accessToken;
+    router.push(
+      `/passengers/${primaryBookingId}?adults=${adults}&children=${children}&token=${token}`
+    );
   }
 
   if (!trip || (isRoundTrip && !outboundTrip) || (isRoundTrip && pricingLoading)) {
@@ -222,9 +220,6 @@ function BookingContent() {
     trip.availableSeatsBusiness >= seatsNeeded &&
     (!isRoundTrip || outboundTrip!.availableSeatsBusiness >= seatsNeeded);
 
-  // One-way: no discount applies, just the per-seat price × seats needed.
-  // Round-trip: the discounted values come from the server (guestPricing /
-  // businessPricing), already fetched above.
   const guestDisplay: PricingPreview = isRoundTrip
     ? guestPricing!
     : { original: trip.priceGuest * seatsNeeded, discounted: trip.priceGuest * seatsNeeded, savings: 0 };

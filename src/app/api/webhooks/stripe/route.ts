@@ -23,6 +23,52 @@ async function generateUniquePnr(): Promise<string> {
   throw new Error("Could not generate a unique PNR after 10 attempts");
 }
 
+// Best-effort lookup of the real Stripe processing fee (and the payment
+// intent id) for this checkout session's payment. Returns nulls (never
+// throws) if anything about this lookup fails — capturing these values
+// must never block booking confirmation, which is the critical path
+// here. Stored once, at confirmation time, so a future cancellation can
+// request a refund and compute its fee straight from the database
+// instead of resolving session -> payment_intent -> charge live (see
+// engine.ts).
+async function getStripePaymentDetails(
+  session: Stripe.Checkout.Session
+): Promise<{ paymentIntentId: string | null; stripeFeeAmount: number | null }> {
+  const empty = { paymentIntentId: null, stripeFeeAmount: null };
+
+  try {
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+    if (!paymentIntentId) return empty;
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge.balance_transaction"],
+    });
+
+    const charge = paymentIntent.latest_charge;
+    if (!charge || typeof charge === "string") {
+      return { paymentIntentId, stripeFeeAmount: null };
+    }
+
+    const balanceTransaction = charge.balance_transaction;
+    if (!balanceTransaction || typeof balanceTransaction === "string") {
+      return { paymentIntentId, stripeFeeAmount: null };
+    }
+
+    // balance_transaction.fee is in the smallest currency unit (cents),
+    // same scale as the unit_amount we sent when creating the session
+    // (see pay/route.ts) — dividing by 100 keeps it consistent with how
+    // Payment.amount is already stored.
+    return { paymentIntentId, stripeFeeAmount: balanceTransaction.fee / 100 };
+  } catch (err) {
+    console.error("Failed to retrieve Stripe payment details:", err);
+    return empty;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -65,6 +111,10 @@ export async function POST(request: NextRequest) {
       if (booking && booking.status !== "CONFIRMED" && booking.paymentId) {
         const pnr = await generateUniquePnr();
 
+        // Fetched before the transaction: read-only, and never something
+        // we want to retry inside a DB transaction.
+        const { paymentIntentId, stripeFeeAmount } = await getStripePaymentDetails(session);
+
         const writes = [
           prisma.booking.update({
             where: { id: bookingId },
@@ -74,7 +124,12 @@ export async function POST(request: NextRequest) {
           // not by a bookingId field (Payment no longer has one).
           prisma.payment.update({
             where: { id: booking.paymentId },
-            data: { status: "PAID", paymentDate: new Date() },
+            data: {
+              status: "PAID",
+              paymentDate: new Date(),
+              stripeFeeAmount,
+              stripePaymentIntentId: paymentIntentId,
+            },
           }),
         ];
 

@@ -6,7 +6,6 @@ import {
   validateNonNegativeNumber,
   validateOptionalNonNegative,
   validatePercent,
-  validateTierRange,
   validateTierSetIntegrity,
   ValidationError,
 } from "@/lib/pricing/validation";
@@ -24,10 +23,18 @@ export async function GET() {
   return NextResponse.json({ tiers });
 }
 
-// POST — create a new discount tier. ADMIN-only.
-// Validates the tier itself, then re-validates the WHOLE resulting set
-// (existing tiers + the new one) for gaps/overlaps before writing.
-export async function POST(request: NextRequest) {
+// PUT — bulk replace the entire tier set in one atomic operation. ADMIN-only.
+//
+// Tiers are only meaningful as a whole set (no gaps, no overlap, starts at
+// 0, ends open-ended) — an add or a delete on its own can temporarily
+// break that shape even when the admin's end goal is valid. So instead of
+// per-row create/update/delete, the client sends the FULL proposed list
+// after all local edits, and this route validates + writes it as a single
+// transaction. Row ids are not preserved across saves (old rows are
+// dropped and new ones created) — safe here because nothing else in the
+// schema references a tier by id; the pricing engine matches tiers by
+// value at calculation time, not by id.
+export async function PUT(request: NextRequest) {
   const session = await adminAuth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,29 +44,33 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const minTotal = validateNonNegativeNumber(body.minTotal, "Minimum total");
-    const maxTotal = validateOptionalNonNegative(body.maxTotal, "Maximum total");
-    const discountPercent = validatePercent(body.discountPercent, "Discount percent");
+    const rawTiers = body.tiers;
 
-    validateTierRange(minTotal, maxTotal, "Minimum total", "Maximum total");
+    if (!Array.isArray(rawTiers)) {
+      return NextResponse.json({ error: "Expected a list of tiers." }, { status: 400 });
+    }
 
-    const existing = await prisma.roundTripDiscountTier.findMany();
-    const resultingSet = [
-      ...existing.map((t) => ({ min: t.minTotal, max: t.maxTotal })),
-      { min: minTotal, max: maxTotal },
-    ];
-    validateTierSetIntegrity(resultingSet);
-
-    const created = await prisma.roundTripDiscountTier.create({
-      data: { minTotal, maxTotal, discountPercent },
+    const validated = rawTiers.map((t, i) => {
+      const minTotal = validateNonNegativeNumber(t.minTotal, `Tier ${i + 1}: Minimum total`);
+      const maxTotal = validateOptionalNonNegative(t.maxTotal, `Tier ${i + 1}: Maximum total`);
+      const discountPercent = validatePercent(t.discountPercent, `Tier ${i + 1}: Discount percent`);
+      return { minTotal, maxTotal, discountPercent };
     });
 
-    return NextResponse.json({ tier: created }, { status: 201 });
+    validateTierSetIntegrity(validated.map((t) => ({ min: t.minTotal, max: t.maxTotal })));
+
+    const saved = await prisma.$transaction(async (tx) => {
+      await tx.roundTripDiscountTier.deleteMany({});
+      await tx.roundTripDiscountTier.createMany({ data: validated });
+      return tx.roundTripDiscountTier.findMany({ orderBy: { minTotal: "asc" } });
+    });
+
+    return NextResponse.json({ tiers: saved });
   } catch (error) {
     if (error instanceof ValidationError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    console.error("Create discount tier error:", error);
+    console.error("Save discount tiers error:", error);
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }
 }

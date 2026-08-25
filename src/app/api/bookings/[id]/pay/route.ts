@@ -70,6 +70,17 @@ export async function POST(
         ? `${legs[0].departingPlace} \u21C4 ${legs[0].destination}`
         : `${legs[0].departingPlace} \u2192 ${legs[0].destination}`;
 
+    // The accessToken lives only on the OUTBOUND booking row (see
+    // api/bookings/route.ts) — `booking` here is always the one the
+    // frontend has been carrying through the whole flow (invoice's
+    // handlePayment always calls this with the outbound id), so
+    // `booking.accessToken`, not `paymentBooking.accessToken`, is the
+    // right one to forward. This is what lets the guest (not logged in,
+    // pnr doesn't exist until the webhook fires) view /payment/success
+    // and /payment/cancel afterward.
+    const tokenParam = booking.accessToken ? `&token=${booking.accessToken}` : "";
+    const tokenOnlyParam = booking.accessToken ? `?token=${booking.accessToken}` : "";
+
     // NOTE: Stripe test account settles in EUR, so we pass the invoice
     // total (computed in TND) as EUR cents. This is a simplification for
     // the test/learning environment, not a real currency conversion.
@@ -88,8 +99,8 @@ export async function POST(
           quantity: 1,
         },
       ],
-      success_url: `${origin}/payment/success/${paymentBooking.id}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/payment/cancel/${paymentBooking.id}`,
+      success_url: `${origin}/payment/success/${paymentBooking.id}?session_id={CHECKOUT_SESSION_ID}${tokenParam}`,
+      cancel_url: `${origin}/payment/cancel/${paymentBooking.id}${tokenOnlyParam}`,
       metadata: {
         bookingId: String(paymentBooking.id),
       },

@@ -1,12 +1,16 @@
 "use client";
 
 import { Suspense } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 function CancelContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const bookingId = params.bookingId as string;
+  // Guest access token forwarded from pay/route.ts's Stripe cancel_url —
+  // needed so "Back to Invoice" below still works for a guest.
+  const token = searchParams.get("token") || "";
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-linear-to-b from-white via-[#FFF5F5] to-[#FFE5E5] px-6 text-center text-[#16324F]">
@@ -23,7 +27,7 @@ function CancelContent() {
 
         <button
           type="button"
-          onClick={() => router.push(`/invoice/${bookingId}`)}
+          onClick={() => router.push(`/invoice/${bookingId}?token=${token}`)}
           className="mt-6 w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
         >
           Back to Invoice
