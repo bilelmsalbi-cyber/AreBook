@@ -21,6 +21,16 @@ const bookingInclude = {
   payment: {
     select: { status: true, amount: true },
   },
+  // The account this booking is linked to, if any — assigned at
+  // creation time (see lib/cancellation.ts note on customerId), so the
+  // outbound row already carries its own customer directly, no
+  // fallback through linkedBooking needed.
+  customer: {
+    select: {
+      id: true,
+      person: { select: { firstName: true, lastName: true, email: true } },
+    },
+  },
   // Round-trip: the return leg carries neither its own pnr nor its own
   // Payment — both resolve back through this relation.
   linkedBooking: {
@@ -42,7 +52,8 @@ export async function GET(request: NextRequest) {
   const idParam = searchParams.get("id");
   const pnrParam = searchParams.get("pnr");
   const nameParam = searchParams.get("name");
-  const statusParam = searchParams.get("status");
+  const statusParam = searchParams.get("status"); // payment status
+  const bookingStatusParam = searchParams.get("bookingStatus"); // booking status
   const tripIdParam = searchParams.get("tripId");
   const dateParam = searchParams.get("date");
 
@@ -119,6 +130,26 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (bookingStatusParam) {
+    // Booking.status (PENDING/CONFIRMED/CANCELLED) — distinct from the
+    // payment-status filter above. Both legs of a round-trip pair are
+    // always set together (see executeCancellation in
+    // lib/cancellation.ts), so filtering on the outbound row's own
+    // status is authoritative — no linkedBooking fallback needed here,
+    // unlike pnr/payment.
+    if (
+      bookingStatusParam !== "PENDING" &&
+      bookingStatusParam !== "CONFIRMED" &&
+      bookingStatusParam !== "CANCELLED"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid booking status." },
+        { status: 400 }
+      );
+    }
+    conditions.push({ status: bookingStatusParam });
+  }
+
   if (tripIdParam) {
     const tripId = Number(tripIdParam);
     if (!Number.isInteger(tripId)) {
@@ -152,20 +183,25 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  // Round-trip: the return leg carries `linkedBookingId` pointing at the
-  // outbound (payment-holding) leg. When both legs of a pair are present
-  // in this result set, drop the return leg as its own row and merge its
-  // trip into the outbound row as `returnTrip` — so the admin sees one
-  // line per round-trip booking instead of two. If only one leg matched
-  // the filters (e.g. searching by the return trip's id), it's shown
-  // standalone as before; its pnr/payment already fall back through
-  // `linkedBooking` (see paymentLabel/pnrLabel in BookingsManager).
-  const idsInSet = new Set(raw.map((b) => b.id));
+  // Round-trip: the OUTBOUND leg carries `linkedBookingId` pointing at
+  // the return leg — the return leg never points back. So a booking is
+  // a "return leg" if and only if some other booking in this result set
+  // has a linkedBookingId equal to its id. Those rows are dropped, and
+  // their trip is merged onto the outbound row as `returnTrip` — so the
+  // admin sees one line per round-trip booking instead of two, with the
+  // outbound row (holding the real pnr/payment/customer) as the primary
+  // line. If only one leg matched the filters (e.g. searching by the
+  // return trip's id), it's shown standalone as before; its pnr/payment
+  // already fall back through `linkedBooking` (see paymentLabel/pnrLabel
+  // in BookingsManager).
+  const returnLegIds = new Set(
+    raw.filter((b) => b.linkedBookingId !== null).map((b) => b.linkedBookingId as number)
+  );
 
   const bookings = raw
-    .filter((b) => !(b.linkedBookingId && idsInSet.has(b.linkedBookingId)))
+    .filter((b) => !returnLegIds.has(b.id))
     .map((b) => {
-      const returnLeg = raw.find((r) => r.linkedBookingId === b.id) ?? null;
+      const returnLeg = raw.find((r) => r.id === b.linkedBookingId) ?? null;
       return {
         ...b,
         returnTrip: returnLeg ? returnLeg.trip : null,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { BookingResult, TripOption } from "@/types/booking";
 import PassengersModal from "@/components/admin/bookings/PassengersModal";
+import AdminCancelBookingModal from "@/components/admin/bookings/AdminCancelBookingModal";
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: "", label: "Any" },
@@ -10,6 +11,16 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: "PENDING", label: "Pending" },
   { value: "PAID", label: "Paid" },
   { value: "FAILED", label: "Failed" },
+  { value: "REFUNDED", label: "Refunded" },
+];
+
+// Booking.status — distinct from payment status above. Included so the
+// admin/employee can filter for cancelled bookings specifically.
+const BOOKING_STATUS_OPTIONS = [
+  { value: "", label: "Any" },
+  { value: "PENDING", label: "Pending" },
+  { value: "CONFIRMED", label: "Confirmed" },
+  { value: "CANCELLED", label: "Cancelled" },
 ];
 
 function formatDateTime(iso: string) {
@@ -34,6 +45,7 @@ function paymentLabel(booking: BookingResult) {
   if (!effectivePayment) return "Not paid yet";
   if (effectivePayment.status === "PAID") return "Paid";
   if (effectivePayment.status === "FAILED") return "Failed";
+  if (effectivePayment.status === "REFUNDED") return "Refunded";
   return "Pending";
 }
 
@@ -49,6 +61,15 @@ function priceLabel(booking: BookingResult) {
   return `$${effectivePayment.amount.toFixed(2)}`;
 }
 
+// Assigned at booking creation time (see lib/cancellation.ts) — always
+// present directly on the outbound row when the booking belongs to an
+// account, never only through linkedBooking.
+function accountLabel(booking: BookingResult) {
+  if (!booking.customer) return "Guest booking";
+  const { firstName, lastName, email } = booking.customer.person;
+  return `${firstName} ${lastName} (${email})`;
+}
+
 // A booking is "past" only when every leg it includes has already
 // departed. One-way: just the outbound leg. Round-trip: both outbound
 // and return must be in the past — if the return leg is still upcoming,
@@ -61,11 +82,87 @@ function isPastBooking(booking: BookingResult) {
   return outboundPast && returnPast;
 }
 
+// Mirrors checkCancellationEligibility in lib/cancellation.ts (status
+// must be CONFIRMED, outbound leg not yet departed) — this is just the
+// UI's guess of whether to show the Cancel action at all; the real
+// eligibility check always happens server-side regardless.
+function isCancellable(booking: BookingResult) {
+  return booking.status === "CONFIRMED" && !isPastBooking(booking);
+}
+
+// Facebook-style "⋮" actions menu — used both in the desktop table row
+// and the mobile card layout, so the two only ever need to stay in sync
+// through this one component. Closes on any tap outside it (invisible
+// full-screen backdrop button), same pattern as the modals in this app.
+function ActionsMenu({
+  isOpen,
+  onToggle,
+  onClose,
+  onViewPassengers,
+  cancellable,
+  onCancel,
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onViewPassengers: () => void;
+  cancellable: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="relative inline-block text-left">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label="Actions"
+        className="rounded-lg p-1.5 text-[#64748B] transition-colors duration-150 hover:bg-[#1E293B] hover:text-white"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={onClose}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute right-0 top-9 z-50 w-48 overflow-hidden rounded-lg border border-[#1E293B] bg-[#111827] shadow-xl">
+            <button
+              type="button"
+              onClick={onViewPassengers}
+              className="block w-full px-4 py-2.5 text-left text-xs font-medium text-[#CBD5E1] transition-colors duration-150 hover:bg-[#1E293B] hover:text-white"
+            >
+              View Passengers
+            </button>
+            {cancellable && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="block w-full border-t border-[#1E293B] px-4 py-2.5 text-left text-xs font-medium text-red-400 transition-colors duration-150 hover:bg-[#1E293B]"
+              >
+                Cancel Booking
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const emptyFilters = {
   id: "",
   pnr: "",
   name: "",
   status: "",
+  bookingStatus: "",
   tripId: "",
   date: "",
 };
@@ -84,19 +181,22 @@ export default function BookingsManager({
   const [viewingBookingId, setViewingBookingId] = useState<number | null>(
     null
   );
+  const [cancellingBooking, setCancellingBooking] = useState<BookingResult | null>(
+    null
+  );
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
 
   function updateFilter(field: keyof typeof emptyFilters, value: string) {
     setFilters((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function runSearch() {
     const params = new URLSearchParams();
     if (filters.id.trim()) params.set("id", filters.id.trim());
     if (filters.pnr.trim()) params.set("pnr", filters.pnr.trim());
     if (filters.name.trim()) params.set("name", filters.name.trim());
     if (filters.status) params.set("status", filters.status);
+    if (filters.bookingStatus) params.set("bookingStatus", filters.bookingStatus);
     if (filters.tripId) params.set("tripId", filters.tripId);
     if (filters.date) params.set("date", filters.date);
 
@@ -123,12 +223,26 @@ export default function BookingsManager({
     setResults(data.bookings);
   }
 
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    runSearch();
+  }
+
   function handleClear() {
     setFilters(emptyFilters);
     setResults([]);
     setHasSearched(false);
     setError(null);
     setExcludePast(true);
+  }
+
+  // After a cancellation succeeds, re-run the current search so the
+  // row's status (and the payment/cancelled-status filters, if active)
+  // reflect reality immediately instead of showing stale data until the
+  // next manual search.
+  function handleCancelled() {
+    setCancellingBooking(null);
+    if (hasSearched) runSearch();
   }
 
   const visibleResults = excludePast
@@ -146,7 +260,7 @@ export default function BookingsManager({
 
       <form
         onSubmit={handleSearch}
-        className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-[#1E293B] bg-[#111827] p-4 md:grid-cols-6"
+        className="mt-6 grid grid-cols-1 gap-4 rounded-xl border border-[#1E293B] bg-[#111827] p-4 sm:grid-cols-2 md:grid-cols-6"
       >
         <div>
           <label className="mb-1 block text-xs text-[#64748B]">
@@ -203,6 +317,23 @@ export default function BookingsManager({
         </div>
 
         <div>
+          <label className="mb-1 block text-xs text-[#64748B]">
+            Booking Status
+          </label>
+          <select
+            value={filters.bookingStatus}
+            onChange={(e) => updateFilter("bookingStatus", e.target.value)}
+            className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+          >
+            {BOOKING_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
           <label className="mb-1 block text-xs text-[#64748B]">Trip</label>
           <select
             value={filters.tripId}
@@ -230,7 +361,7 @@ export default function BookingsManager({
           />
         </div>
 
-        <div className="col-span-2 flex items-end gap-4 md:col-span-6">
+        <div className="col-span-1 flex flex-wrap items-end gap-4 sm:col-span-2 md:col-span-6">
           <label className="flex items-center gap-1.5 text-sm text-[#94A3B8]">
             <input
               type="radio"
@@ -260,13 +391,15 @@ export default function BookingsManager({
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-      <div className="mt-6 overflow-hidden rounded-xl border border-[#1E293B]">
+      {/* ---------- Desktop / tablet: table ---------- */}
+      <div className="mt-6 hidden overflow-visible rounded-xl border border-[#1E293B] md:block">
         <table className="w-full text-left text-sm">
           <thead className="bg-[#111827] text-[#64748B]">
             <tr>
               <th className="px-4 py-3 font-medium">ID</th>
               <th className="px-4 py-3 font-medium">PNR</th>
               <th className="px-4 py-3 font-medium">Passenger(s)</th>
+              <th className="px-4 py-3 font-medium">Account</th>
               <th className="px-4 py-3 font-medium">Trip</th>
               <th className="px-4 py-3 font-medium">Class</th>
               <th className="px-4 py-3 font-medium">Booking Status</th>
@@ -279,14 +412,14 @@ export default function BookingsManager({
           <tbody>
             {!hasSearched && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={11} className="px-4 py-6 text-center text-[#64748B]">
                   Enter at least one filter and search.
                 </td>
               </tr>
             )}
             {hasSearched && !loading && visibleResults.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-[#64748B]">
+                <td colSpan={11} className="px-4 py-6 text-center text-[#64748B]">
                   No bookings match this search.
                 </td>
               </tr>
@@ -299,6 +432,7 @@ export default function BookingsManager({
                 <td className="px-4 py-3">#{booking.id}</td>
                 <td className="px-4 py-3">{pnrLabel(booking)}</td>
                 <td className="px-4 py-3">{passengerNames(booking)}</td>
+                <td className="px-4 py-3 text-xs">{accountLabel(booking)}</td>
                 <td className="px-4 py-3">
                   <div>
                     {booking.trip.departingPlace} → {booking.trip.destination}
@@ -320,13 +454,22 @@ export default function BookingsManager({
                   {formatDateTime(booking.bookingDate)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => setViewingBookingId(booking.id)}
-                    className="text-xs font-semibold text-[#3B82F6] hover:underline"
-                  >
-                    View Passengers
-                  </button>
+                  <ActionsMenu
+                    isOpen={openMenuId === booking.id}
+                    onToggle={() =>
+                      setOpenMenuId(openMenuId === booking.id ? null : booking.id)
+                    }
+                    onClose={() => setOpenMenuId(null)}
+                    onViewPassengers={() => {
+                      setViewingBookingId(booking.id);
+                      setOpenMenuId(null);
+                    }}
+                    cancellable={isCancellable(booking)}
+                    onCancel={() => {
+                      setCancellingBooking(booking);
+                      setOpenMenuId(null);
+                    }}
+                  />
                 </td>
               </tr>
             ))}
@@ -334,10 +477,84 @@ export default function BookingsManager({
         </table>
       </div>
 
+      {/* ---------- Mobile: stacked cards ---------- */}
+      <div className="mt-6 space-y-3 md:hidden">
+        {!hasSearched && (
+          <p className="py-6 text-center text-sm text-[#64748B]">
+            Enter at least one filter and search.
+          </p>
+        )}
+        {hasSearched && !loading && visibleResults.length === 0 && (
+          <p className="py-6 text-center text-sm text-[#64748B]">
+            No bookings match this search.
+          </p>
+        )}
+        {visibleResults.map((booking) => (
+          <div
+            key={booking.id}
+            className="rounded-xl border border-[#1E293B] bg-[#111827] p-4"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  #{booking.id} — {pnrLabel(booking)}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-[#94A3B8]">
+                  {passengerNames(booking)}
+                </p>
+              </div>
+              <ActionsMenu
+                isOpen={openMenuId === booking.id}
+                onToggle={() =>
+                  setOpenMenuId(openMenuId === booking.id ? null : booking.id)
+                }
+                onClose={() => setOpenMenuId(null)}
+                onViewPassengers={() => {
+                  setViewingBookingId(booking.id);
+                  setOpenMenuId(null);
+                }}
+                cancellable={isCancellable(booking)}
+                onCancel={() => {
+                  setCancellingBooking(booking);
+                  setOpenMenuId(null);
+                }}
+              />
+            </div>
+
+            <div className="mt-3 space-y-1 border-t border-[#1E293B] pt-3 text-xs text-[#94A3B8]">
+              <p>
+                {booking.trip.departingPlace} → {booking.trip.destination}
+                {booking.returnTrip && (
+                  <span className="text-[#3B82F6]">
+                    {" "}
+                    ↩ {booking.returnTrip.departingPlace} → {booking.returnTrip.destination}
+                  </span>
+                )}
+              </p>
+              <p>{accountLabel(booking)}</p>
+              <p>
+                {booking.seatClass} · {booking.status} · {paymentLabel(booking)} ·{" "}
+                {priceLabel(booking)}
+              </p>
+              <p>Booked {formatDateTime(booking.bookingDate)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {viewingBookingId !== null && (
         <PassengersModal
           bookingId={viewingBookingId}
           onClose={() => setViewingBookingId(null)}
+        />
+      )}
+
+      {cancellingBooking !== null && (
+        <AdminCancelBookingModal
+          bookingId={cancellingBooking.id}
+          isRoundTrip={cancellingBooking.tripType === "ROUND_TRIP"}
+          onClose={() => setCancellingBooking(null)}
+          onCancelled={handleCancelled}
         />
       )}
     </div>

@@ -110,6 +110,7 @@ model Booking {
   expiresAt         DateTime?
 
   pnr               String?       @unique
+  accessToken       String?       @unique
   stripeSessionId   String?       @unique
 
   linkedBookingId   Int?          @unique
@@ -160,15 +161,16 @@ model SpecialRequest {
 }
 
 model Payment {
-  id          Int           @id @default(autoincrement())
-  amount      Float
-  status      PaymentStatus @default(PENDING)
-  paymentDate DateTime?
-  bookings    Booking[]
+  id                    Int           @id @default(autoincrement())
+  amount                Float
+  status                PaymentStatus @default(PENDING)
+  paymentDate           DateTime?
+  stripeFeeAmount       Float?
+  stripePaymentIntentId String?
+  bookings              Booking[]
 
   @@map("payments")
 }
-
 model ServicePrice {
   id          Int      @id @default(autoincrement())
   serviceType String   @unique
@@ -200,6 +202,13 @@ model CancellationTier {
 
   @@map("cancellation_tiers")
 }
+model EmployeeCancellationLimit {
+  id              Int      @id @default(autoincrement())
+  maxRefundAmount Float
+  updatedAt       DateTime @updatedAt
+
+  @@map("employee_cancellation_limits")
+}
 
 enum AdminRole {
   ADMIN
@@ -226,4 +235,5 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+  REFUNDED
 }

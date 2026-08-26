@@ -23,7 +23,20 @@ export type BookingResult = {
     plane: { aircraftType: string };
   } | null;
   passengers: { person: { firstName: string; lastName: string } }[];
-  payment: { status: "PENDING" | "PAID" | "FAILED"; amount: number } | null;
+  // Mirrors the full PaymentStatus enum (schema.prisma) — REFUNDED is set
+  // by the cancellation flow (see executeCancellation in lib/cancellation.ts).
+  payment: {
+    status: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+    amount: number;
+  } | null;
+  // The customer account this booking is linked to, if any — assigned
+  // at creation time (see lib/cancellation.ts), so this is always
+  // present directly on the outbound row, never through linkedBooking.
+  // Null means this was (or still is) a guest booking.
+  customer: {
+    id: number;
+    person: { firstName: string; lastName: string; email: string };
+  } | null;
   linkedBooking: {
     id: number;
     pnr: string | null;

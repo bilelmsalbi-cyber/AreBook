@@ -24,6 +24,18 @@ export type CancellationTierItem = {
   updatedAt: string;
 };
 
+// The single configured cap on how large a refund (finalRefundAmount) an
+// EMPLOYEE may issue when cancelling a booking from the admin dashboard.
+// null means it has never been set — in that state, employees cannot
+// cancel any booking at all (safe-by-default; see
+// checkEmployeeCancellationLimit in lib/cancellation.ts). ADMIN is never
+// capped by this value.
+export type EmployeeCancellationLimitItem = {
+  id: number;
+  maxRefundAmount: number;
+  updatedAt: string;
+} | null;
+
 // Draft row shapes used while the admin is editing a tier set locally,
 // before saving. `key` is a client-only stable identifier (existing DB id
 // as a string, or a generated one for newly added rows) used for React

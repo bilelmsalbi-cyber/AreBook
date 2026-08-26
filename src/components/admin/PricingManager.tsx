@@ -5,11 +5,12 @@ import type {
   ServicePriceItem,
   DiscountTierItem,
   CancellationTierItem,
+  EmployeeCancellationLimitItem,
   DiscountTierDraft,
   CancellationTierDraft,
 } from "@/types/pricing";
 
-type Tab = "services" | "discounts" | "cancellations";
+type Tab = "services" | "discounts" | "cancellations" | "employeeLimit";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -26,11 +27,13 @@ export default function PricingManager({
   initialServices,
   initialDiscountTiers,
   initialCancellationTiers,
+  initialEmployeeCancellationLimit,
 }: {
   role: string;
   initialServices: ServicePriceItem[];
   initialDiscountTiers: DiscountTierItem[];
   initialCancellationTiers: CancellationTierItem[];
+  initialEmployeeCancellationLimit: EmployeeCancellationLimitItem;
 }) {
   const isAdmin = role === "ADMIN";
   const [tab, setTab] = useState<Tab>("services");
@@ -240,10 +243,60 @@ export default function PricingManager({
     setCancellationDraft([]);
   }
 
-  const tabs: { id: Tab; label: string }[] = [
+  // ---------- Employee cancellation limit: single-value edit-in-place ----------
+  // Unlike the two tier sets above, this isn't a list — it's one number.
+  // Until it's set at least once, EMPLOYEE cannot cancel any booking at
+  // all (see checkEmployeeCancellationLimit in lib/cancellation.ts) —
+  // the read-only view surfaces that clearly so an Admin knows to set it.
+  const [employeeLimit, setEmployeeLimit] = useState(initialEmployeeCancellationLimit);
+  const [employeeLimitEditing, setEmployeeLimitEditing] = useState(false);
+  const [employeeLimitDraft, setEmployeeLimitDraft] = useState("");
+  const [savingEmployeeLimit, setSavingEmployeeLimit] = useState(false);
+
+  function startEmployeeLimitEdit() {
+    setEmployeeLimitDraft(employeeLimit ? String(employeeLimit.maxRefundAmount) : "");
+    setError(null);
+    setEmployeeLimitEditing(true);
+  }
+
+  function cancelEmployeeLimitEdit() {
+    setEmployeeLimitEditing(false);
+    setEmployeeLimitDraft("");
+    setError(null);
+  }
+
+  async function saveEmployeeLimitDraft() {
+    setSavingEmployeeLimit(true);
+    setError(null);
+
+    const res = await fetch("/api/admin/pricing/employee-cancellation-limit", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxRefundAmount: Number(employeeLimitDraft) }),
+    });
+    const data = await res.json();
+    setSavingEmployeeLimit(false);
+
+    if (!res.ok) {
+      setError(data.error || "Something went wrong.");
+      return;
+    }
+
+    setEmployeeLimit(data.limit);
+    setEmployeeLimitEditing(false);
+    setEmployeeLimitDraft("");
+  }
+
+    const tabs: { id: Tab; label: string }[] = [
     { id: "services", label: "Service Prices" },
     { id: "discounts", label: "Round-Trip Discounts" },
     { id: "cancellations", label: "Cancellation Policy" },
+    // Employees never see this tab at all — not just a disabled Edit
+    // button. Their cancellation cap is a policy detail set by Admins,
+    // not something they need visibility into from the Pricing screen.
+    ...(isAdmin
+      ? [{ id: "employeeLimit" as Tab, label: "Employee Cancellation Limit" }]
+      : []),
   ];
 
   return (
@@ -263,13 +316,13 @@ export default function PricingManager({
         </p>
       )}
 
-      <div className="mt-6 flex gap-2 border-b border-[#1E293B]">
+            <div className="mt-6 flex gap-2 overflow-x-auto border-b border-[#1E293B]">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors duration-150 ${
+            className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors duration-150 ${
               tab === t.id
                 ? "border-b-2 border-[#3B82F6] text-white"
                 : "text-[#64748B] hover:text-white"
@@ -615,6 +668,82 @@ export default function PricingManager({
                   className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60"
                 >
                   {savingCancellations ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------- Employee cancellation limit tab ---------- */}
+      {tab === "employeeLimit" && (
+        <div className="mt-6 max-w-md">
+          <p className="mb-4 text-sm text-[#64748B]">
+            The maximum refund amount (in TND) an Employee is allowed to issue when
+            cancelling a booking from the admin dashboard. Admins are never capped by
+            this value. Until a limit is set, Employees cannot cancel any booking.
+          </p>
+
+          {!employeeLimitEditing && (
+            <>
+              <div className="rounded-xl border border-[#1E293B] p-4">
+                {employeeLimit ? (
+                  <>
+                    <p className="text-2xl font-semibold text-white">
+                      {employeeLimit.maxRefundAmount.toFixed(2)} TND
+                    </p>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      Last updated {formatDate(employeeLimit.updatedAt)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-amber-400">
+                    Not configured yet — Employees currently cannot cancel any booking.
+                  </p>
+                )}
+              </div>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={startEmployeeLimitEdit}
+                  className="mt-4 rounded-lg bg-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#2563EB]"
+                >
+                  {employeeLimit ? "Edit Limit" : "Set Limit"}
+                </button>
+              )}
+            </>
+          )}
+
+          {employeeLimitEditing && (
+            <div className="rounded-xl border border-[#1E293B] p-4">
+              <label className="mb-1 block text-xs text-[#64748B]">
+                Max refund amount (TND)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={employeeLimitDraft}
+                onChange={(e) => setEmployeeLimitDraft(e.target.value)}
+                className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+              />
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={cancelEmployeeLimitEdit}
+                  className="rounded-lg border border-[#1E293B] px-4 py-2 text-sm font-medium text-[#94A3B8] hover:text-white"
+                >
+                  Back (discard changes)
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEmployeeLimitDraft}
+                  disabled={savingEmployeeLimit || employeeLimitDraft.trim() === ""}
+                  className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60"
+                >
+                  {savingEmployeeLimit ? "Saving..." : "Save"}
                 </button>
               </div>
             </div>

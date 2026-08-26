@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { isRateLimited, cleanupOldBuckets } from "@/lib/rateLimit";
+import { adminAuth } from "@/lib/auth-admin";
 import {
   resolvePrimaryBooking,
   checkCancellationEligibility,
   computeRefundBreakdown,
   verifyOwnership,
+  checkEmployeeCancellationLimit,
   executeCancellation,
   type AuthContext,
 } from "@/lib/cancellation";
 
 // ---------------------------------------------------------------------
-// POST /api/bookings/[id]/cancel
-// Customer/guest-facing cancellation. The actual refund + DB update +
-// email sequence now lives in executeCancellation() (lib/cancellation.ts),
-// shared with the admin-facing route — see that file for the full
-// rationale (idempotency, retry, refusal-without-payment-intent, etc.).
+// POST /api/admin/bookings/[id]/cancel
+// Executes the cancellation from the admin dashboard. Available to both
+// ADMIN and EMPLOYEE (see rationale in preview/route.ts and
+// lib/cancellation.ts) — intentionally NOT gated by requireAdminRole.
 //
-// Same two ownership paths as /cancel/preview (see comments there and in
-// lib/cancellation.ts) — re-verified independently here rather than
-// trusting that a prior preview call succeeded.
+// Ownership never applies to staff (see verifyOwnership), and the same
+// CancellationTier deduction is applied as everywhere else — no
+// "full refund" override exists for staff.
 // ---------------------------------------------------------------------
 
 export async function POST(
@@ -27,54 +26,29 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await adminAuth();
+    if (!session?.user?.adminId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const role = session.user.role;
+    if (role !== "ADMIN" && role !== "EMPLOYEE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const bookingId = parseInt(id, 10);
-
     if (isNaN(bookingId)) {
       return NextResponse.json({ error: "Invalid booking id" }, { status: 400 });
     }
 
-    let body: { pnr?: string; lastName?: string } = {};
-    try {
-      body = await request.json();
-    } catch {
-      // No body is fine for the logged-in path.
-    }
-
-    const session = await auth();
-    const customerId = session?.user?.customerId
-      ? parseInt(session.user.customerId, 10)
-      : null;
-
-    let authContext: AuthContext;
-
-    if (customerId) {
-      authContext = { type: "customer", customerId };
-    } else {
-      const pnr = typeof body.pnr === "string" ? body.pnr.trim() : "";
-      const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
-
-      if (!pnr || !lastName) {
-        return NextResponse.json(
-          { error: "Log in, or provide your PNR and last name." },
-          { status: 401 }
-        );
-      }
-
-      const ip = request.headers.get("x-forwarded-for") || "unknown";
-      cleanupOldBuckets();
-      if (isRateLimited(ip)) {
-        return NextResponse.json(
-          { error: "Too many attempts. Please wait a moment and try again." },
-          { status: 429 }
-        );
-      }
-
-      authContext = { type: "guest", pnr, lastName };
-    }
+    const authContext: AuthContext = {
+      type: "admin",
+      adminId: parseInt(session.user.adminId, 10),
+      role,
+    };
 
     const booking = await resolvePrimaryBooking(bookingId);
-
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
@@ -90,6 +64,16 @@ export async function POST(
     }
 
     const breakdown = await computeRefundBreakdown(booking);
+
+    // Re-checked here independently of preview — never trust a prior
+    // preview call, same rationale applied everywhere else in this flow.
+    const limitCheck = await checkEmployeeCancellationLimit(
+      breakdown.finalRefundAmount,
+      role
+    );
+    if (!limitCheck.ok) {
+      return NextResponse.json({ error: limitCheck.error }, { status: limitCheck.status });
+    }
 
     const result = await executeCancellation(booking, breakdown);
 
@@ -107,7 +91,7 @@ export async function POST(
       ...breakdown,
     });
   } catch (error) {
-    console.error("Error cancelling booking:", error);
+    console.error("Error cancelling booking (admin):", error);
     return NextResponse.json(
       { error: "Error cancelling booking" },
       { status: 500 }

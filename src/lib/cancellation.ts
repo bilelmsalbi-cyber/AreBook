@@ -1,12 +1,16 @@
 import { prisma } from "@/lib/prisma";
+import { stripe } from "@/lib/stripe";
+import { resend } from "@/lib/resend";
+import { buildCancellationEmail } from "@/lib/emails/cancellationConfirmation";
 import { calculateCancellationRefund } from "@/lib/pricing/engine";
 import type { Prisma } from "@prisma/client";
 
 // ---------------------------------------------------------------------
-// Shared by both /cancel/preview and /cancel. Keeping this logic in one
-// place guarantees the numbers a customer sees in the preview are
-// exactly the numbers actually applied at execution time — computing it
-// twice in two separate route files would risk the two drifting apart.
+// Shared by /cancel/preview and /cancel — both the customer-facing and
+// admin-facing routes. Keeping this logic in one place guarantees the
+// numbers anyone sees in a preview are exactly the numbers applied at
+// execution time, and that the actual refund/DB-update/email sequence
+// only exists once, regardless of who triggered it.
 // ---------------------------------------------------------------------
 
 const bookingWithCancellationInclude = {
@@ -51,24 +55,31 @@ export type CancellationCheck =
   | { ok: false; error: string; status: number };
 
 // ---------------------------------------------------------------------
-// Ownership verification — two ways to prove you're allowed to act on
+// Ownership verification — three ways to prove you're allowed to act on
 // this booking:
 //   - "customer": a logged-in session whose customerId matches the
 //     booking's customerId.
 //   - "guest": the PNR + last name, re-checked here (not just trusted
 //     from an earlier /lookup call) — the same requirement enforced in
 //     /api/bookings/lookup applies to every action, not just the search.
+//   - "admin": a logged-in Admin or Employee acting from the admin
+//     dashboard. Ownership doesn't apply to staff at all — they can act
+//     on any booking regardless of who it belongs to. Rate limiting
+//     (relevant to the guest path) doesn't apply here either, since the
+//     caller is already authenticated via adminAuth().
 //
-// Critical rule (agreed earlier): a booking created under a customer
-// account can ONLY ever be managed through that account. The guest path
-// always rejects such bookings, even with a fully correct PNR + last
-// name — same generic message as a genuine mismatch, so the response
-// never confirms that a PNR/name pair was valid.
+// Critical rule (customer/guest only): a booking created under a
+// customer account can ONLY ever be managed through that account via
+// the guest path. The guest path always rejects such bookings, even
+// with a fully correct PNR + last name — same generic message as a
+// genuine mismatch, so the response never confirms that a PNR/name pair
+// was valid. This rule does not apply to the admin path.
 // ---------------------------------------------------------------------
 
 export type AuthContext =
   | { type: "customer"; customerId: number }
-  | { type: "guest"; pnr: string; lastName: string };
+  | { type: "guest"; pnr: string; lastName: string }
+  | { type: "admin"; adminId: number; role: "ADMIN" | "EMPLOYEE" };
 
 const guestNotFound: CancellationCheck = {
   ok: false,
@@ -80,6 +91,11 @@ export function verifyOwnership(
   booking: BookingForCancellation,
   authContext: AuthContext
 ): CancellationCheck {
+  if (authContext.type === "admin") {
+    // Staff act on any booking — ownership doesn't apply to them.
+    return { ok: true };
+  }
+
   if (authContext.type === "customer") {
     if (booking.customerId !== authContext.customerId) {
       return { ok: false, error: "Forbidden", status: 403 };
@@ -110,7 +126,9 @@ export function verifyOwnership(
 }
 
 // Business rules for whether this booking can be cancelled at all —
-// ownership is checked separately via verifyOwnership above.
+// ownership is checked separately via verifyOwnership above. Applies
+// identically to customer, guest, and admin/employee cancellations —
+// staff don't get to cancel a booking that has already departed either.
 export function checkCancellationEligibility(
   booking: BookingForCancellation,
   now: Date = new Date()
@@ -136,6 +154,47 @@ export function checkCancellationEligibility(
       error:
         "This booking can no longer be cancelled — the outbound flight has already departed.",
       status: 409,
+    };
+  }
+
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------
+// Employee cancellation cap — an EMPLOYEE may only process a
+// cancellation whose actual refund payout (finalRefundAmount, i.e. real
+// money leaving the company, not the original booking price) is at or
+// under the limit an Admin has configured. ADMIN is never capped.
+//
+// Safe-by-default: if no limit has been configured yet at all, every
+// employee cancellation is blocked until an Admin sets one — silently
+// allowing unlimited employee refunds because a setting was never
+// touched would be a much worse failure mode than temporarily blocking
+// a legitimate cancellation.
+// ---------------------------------------------------------------------
+
+export async function checkEmployeeCancellationLimit(
+  finalRefundAmount: number,
+  role: "ADMIN" | "EMPLOYEE"
+): Promise<CancellationCheck> {
+  if (role === "ADMIN") return { ok: true };
+
+  const limit = await prisma.employeeCancellationLimit.findFirst();
+
+  if (!limit) {
+    return {
+      ok: false,
+      error:
+        "No employee cancellation limit has been configured yet. Please ask an Admin to set one in Pricing & Policies, or ask an Admin to process this cancellation.",
+      status: 403,
+    };
+  }
+
+  if (finalRefundAmount > limit.maxRefundAmount) {
+    return {
+      ok: false,
+      error: `This refund (${finalRefundAmount.toFixed(2)} TND) exceeds your cancellation limit (${limit.maxRefundAmount.toFixed(2)} TND). Please ask an Admin to process this cancellation.`,
+      status: 403,
     };
   }
 
@@ -195,4 +254,160 @@ export async function computeRefundBreakdown(
     stripeFeeOnRefund,
     finalRefundAmount,
   };
+}
+
+// ---------------------------------------------------------------------
+// Executes the cancellation: issues the real Stripe refund, then marks
+// the booking(s) CANCELLED and the payment REFUNDED, then sends the
+// confirmation email best-effort. Shared by the customer-facing and
+// admin-facing /cancel routes so this financially sensitive sequence
+// exists exactly once — see api/bookings/[id]/cancel/route.ts and
+// api/admin/bookings/[id]/cancel/route.ts.
+//
+// Assumes ownership + eligibility (+ employee limit, where relevant)
+// have already been checked by the caller.
+// ---------------------------------------------------------------------
+
+export type ExecuteCancellationResult =
+  | { ok: true; stripeRefundId: string | null }
+  | { ok: false; error: string; status: number; stripeRefundId?: string | null };
+
+export async function executeCancellation(
+  booking: BookingForCancellation,
+  breakdown: RefundBreakdown
+): Promise<ExecuteCancellationResult> {
+  // Guard: can't safely refund real money without a payment_intent to
+  // refund against. Refuse the whole operation rather than cancel the
+  // booking without actually returning any money.
+  if (breakdown.finalRefundAmount > 0 && !booking.payment!.stripePaymentIntentId) {
+    console.error(
+      `Booking ${booking.id}: cancellation blocked — refund of ${breakdown.finalRefundAmount} ` +
+        `owed but payment ${booking.payment!.id} has no stripePaymentIntentId on file.`
+    );
+    return {
+      ok: false,
+      error:
+        "This booking can't be cancelled automatically right now. Please contact support.",
+      status: 409,
+    };
+  }
+
+  // ---- Issue the Stripe refund first ----
+  // Idempotency key tied to this booking's id: if this whole request
+  // gets retried (e.g. the refund succeeded but our own DB update below
+  // failed, and the caller retries), Stripe recognizes the same key and
+  // returns the ORIGINAL refund instead of creating a second one. This
+  // is what makes "please try again" a genuinely safe instruction below,
+  // instead of a risk of double refunding.
+  let stripeRefundId: string | null = null;
+  if (breakdown.finalRefundAmount > 0) {
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: booking.payment!.stripePaymentIntentId!,
+        amount: Math.round(breakdown.finalRefundAmount * 100),
+      },
+      { idempotencyKey: `cancel-booking-${booking.id}` }
+    );
+    stripeRefundId = refund.id;
+  }
+
+  // ---- Now update our records, only after the refund succeeded ----
+  const performDbUpdates = () => {
+    const writes = [
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: "CANCELLED" },
+      }),
+      prisma.payment.update({
+        where: { id: booking.payment!.id },
+        data: { status: "REFUNDED" },
+      }),
+    ];
+
+    // Round-trip: cancelling the outbound cancels the linked return leg
+    // too — they were always sold, held, and paid for as a pair.
+    if (booking.linkedBooking) {
+      writes.push(
+        prisma.booking.update({
+          where: { id: booking.linkedBooking.id },
+          data: { status: "CANCELLED" },
+        })
+      );
+    }
+
+    return prisma.$transaction(writes);
+  };
+
+  const MAX_DB_ATTEMPTS = 3;
+  let dbError: unknown = null;
+
+  for (let attempt = 1; attempt <= MAX_DB_ATTEMPTS; attempt++) {
+    try {
+      await performDbUpdates();
+      dbError = null;
+      break;
+    } catch (err) {
+      dbError = err;
+      if (attempt < MAX_DB_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      }
+    }
+  }
+
+  if (dbError) {
+    // The refund already happened at Stripe — this is a serious
+    // reconciliation gap, not a routine failure. Logged loudly so it
+    // gets manual attention.
+    console.error(
+      `CRITICAL: Stripe refund ${stripeRefundId} succeeded for booking ${booking.id} ` +
+        `but the database update failed after ${MAX_DB_ATTEMPTS} attempts. Manual reconciliation needed.`,
+      dbError
+    );
+    return {
+      ok: false,
+      error:
+        "The refund was processed, but we couldn't confirm the cancellation due to a system error. Please contact support and mention this booking.",
+      status: 500,
+      stripeRefundId,
+    };
+  }
+
+  // ---- Send the cancellation email (best-effort) ----
+  // The cancellation itself has already fully succeeded at this point
+  // (refund issued, DB updated), so a failure here must never be
+  // treated as a failure of the cancellation — it's just logged.
+  const firstPassenger = booking.passengers[0];
+  if (firstPassenger) {
+    const { html, text } = buildCancellationEmail({
+      ...breakdown,
+      pnr: booking.pnr ?? "—",
+      firstName: firstPassenger.person.firstName,
+      departingPlace: booking.trip.departingPlace,
+      destination: booking.trip.destination,
+      departureDateTime: booking.trip.departureDateTime.toISOString(),
+      aircraftType: booking.trip.plane.aircraftType,
+      returnLeg: booking.linkedBooking
+        ? {
+            departingPlace: booking.linkedBooking.trip.departingPlace,
+            destination: booking.linkedBooking.trip.destination,
+            departureDateTime: booking.linkedBooking.trip.departureDateTime.toISOString(),
+            aircraftType: booking.linkedBooking.trip.plane.aircraftType,
+          }
+        : undefined,
+    });
+
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+        to: firstPassenger.person.email,
+        subject: `Your AreBook booking has been cancelled — PNR ${booking.pnr ?? ""}`,
+        html,
+        text,
+      });
+    } catch (emailError) {
+      console.error("Failed to send cancellation email:", emailError);
+    }
+  }
+
+  return { ok: true, stripeRefundId };
 }
