@@ -10,6 +10,7 @@ const bookingInclude = {
       departingPlace: true,
       destination: true,
       departureDateTime: true,
+      arrivalDateTime: true,
       plane: { select: { aircraftType: true } },
     },
   },
@@ -21,18 +22,12 @@ const bookingInclude = {
   payment: {
     select: { status: true, amount: true },
   },
-  // The account this booking is linked to, if any — assigned at
-  // creation time (see lib/cancellation.ts note on customerId), so the
-  // outbound row already carries its own customer directly, no
-  // fallback through linkedBooking needed.
   customer: {
     select: {
       id: true,
       person: { select: { firstName: true, lastName: true, email: true } },
     },
   },
-  // Round-trip: the return leg carries neither its own pnr nor its own
-  // Payment — both resolve back through this relation.
   linkedBooking: {
     select: {
       id: true,
@@ -52,8 +47,8 @@ export async function GET(request: NextRequest) {
   const idParam = searchParams.get("id");
   const pnrParam = searchParams.get("pnr");
   const nameParam = searchParams.get("name");
-  const statusParam = searchParams.get("status"); // payment status
-  const bookingStatusParam = searchParams.get("bookingStatus"); // booking status
+  const statusParam = searchParams.get("status");
+  const bookingStatusParam = searchParams.get("bookingStatus");
   const tripIdParam = searchParams.get("tripId");
   const dateParam = searchParams.get("date");
 
@@ -71,8 +66,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (pnrParam) {
-    // A round-trip return leg has no pnr of its own — it shares its
-    // linked (outbound) booking's pnr. Match either.
     const pnr = pnrParam.trim();
     conditions.push({
       OR: [{ pnr }, { linkedBooking: { pnr } }],
@@ -80,9 +73,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (nameParam) {
-    // Passenger details are entered once per round-trip pair, on the
-    // payment-holding booking — check both this booking and its linked
-    // leg so a search still finds the pair either way.
     const passengerNameFilter = {
       some: {
         person: {
@@ -102,8 +92,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (statusParam) {
-    // "NOT_PAID" is a UI-only pseudo-status meaning neither this booking
-    // nor its linked leg has a Payment yet.
     if (statusParam === "NOT_PAID") {
       conditions.push({
         payment: null,
@@ -112,10 +100,9 @@ export async function GET(request: NextRequest) {
     } else if (
       statusParam === "PENDING" ||
       statusParam === "PAID" ||
-      statusParam === "FAILED"
+      statusParam === "FAILED" ||
+      statusParam === "REFUNDED"
     ) {
-      // A round-trip return leg has no Payment of its own — its status
-      // is whatever its linked (outbound) leg's Payment says.
       conditions.push({
         OR: [
           { payment: { status: statusParam } },
@@ -131,12 +118,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (bookingStatusParam) {
-    // Booking.status (PENDING/CONFIRMED/CANCELLED) — distinct from the
-    // payment-status filter above. Both legs of a round-trip pair are
-    // always set together (see executeCancellation in
-    // lib/cancellation.ts), so filtering on the outbound row's own
-    // status is authoritative — no linkedBooking fallback needed here,
-    // unlike pnr/payment.
     if (
       bookingStatusParam !== "PENDING" &&
       bookingStatusParam !== "CONFIRMED" &&
@@ -183,17 +164,6 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  // Round-trip: the OUTBOUND leg carries `linkedBookingId` pointing at
-  // the return leg — the return leg never points back. So a booking is
-  // a "return leg" if and only if some other booking in this result set
-  // has a linkedBookingId equal to its id. Those rows are dropped, and
-  // their trip is merged onto the outbound row as `returnTrip` — so the
-  // admin sees one line per round-trip booking instead of two, with the
-  // outbound row (holding the real pnr/payment/customer) as the primary
-  // line. If only one leg matched the filters (e.g. searching by the
-  // return trip's id), it's shown standalone as before; its pnr/payment
-  // already fall back through `linkedBooking` (see paymentLabel/pnrLabel
-  // in BookingsManager).
   const returnLegIds = new Set(
     raw.filter((b) => b.linkedBookingId !== null).map((b) => b.linkedBookingId as number)
   );

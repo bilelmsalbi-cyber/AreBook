@@ -10,17 +10,6 @@ import {
   type AuthContext,
 } from "@/lib/cancellation";
 
-// ---------------------------------------------------------------------
-// POST /api/admin/bookings/[id]/cancel
-// Executes the cancellation from the admin dashboard. Available to both
-// ADMIN and EMPLOYEE (see rationale in preview/route.ts and
-// lib/cancellation.ts) — intentionally NOT gated by requireAdminRole.
-//
-// Ownership never applies to staff (see verifyOwnership), and the same
-// CancellationTier deduction is applied as everywhere else — no
-// "full refund" override exists for staff.
-// ---------------------------------------------------------------------
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,11 +31,15 @@ export async function POST(
       return NextResponse.json({ error: "Invalid booking id" }, { status: 400 });
     }
 
-    const authContext: AuthContext = {
-      type: "admin",
-      adminId: parseInt(session.user.adminId, 10),
-      role,
-    };
+    let body: { manualOverride?: boolean } = {};
+    try {
+      body = await request.json();
+    } catch {
+      // No body is fine — manualOverride just defaults to false.
+    }
+
+    const adminId = parseInt(session.user.adminId, 10);
+    const authContext: AuthContext = { type: "admin", adminId, role };
 
     const booking = await resolvePrimaryBooking(bookingId);
     if (!booking) {
@@ -65,8 +58,6 @@ export async function POST(
 
     const breakdown = await computeRefundBreakdown(booking);
 
-    // Re-checked here independently of preview — never trust a prior
-    // preview call, same rationale applied everywhere else in this flow.
     const limitCheck = await checkEmployeeCancellationLimit(
       breakdown.finalRefundAmount,
       role
@@ -75,7 +66,16 @@ export async function POST(
       return NextResponse.json({ error: limitCheck.error }, { status: limitCheck.status });
     }
 
-    const result = await executeCancellation(booking, breakdown);
+    // The client's manualOverride flag is NEVER trusted on its own —
+    // only honored when this server independently confirms the caller
+    // is ADMIN. An EMPLOYEE sending manualOverride: true (whether via a
+    // modified request or a UI bug) is silently ignored here, so they
+    // fall through to the normal guard in executeCancellation and get
+    // the standard "contact support" refusal instead.
+    const manualOverride =
+      role === "ADMIN" && body.manualOverride === true ? { adminId } : undefined;
+
+    const result = await executeCancellation(booking, breakdown, true, manualOverride);
 
     if (!result.ok) {
       return NextResponse.json(
@@ -88,6 +88,7 @@ export async function POST(
       bookingId: booking.id,
       status: "CANCELLED",
       stripeRefundId: result.stripeRefundId,
+      manualOverrideUsed: result.manualOverrideUsed,
       ...breakdown,
     });
   } catch (error) {

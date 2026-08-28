@@ -64,16 +64,7 @@ export type CancellationCheck =
 //     /api/bookings/lookup applies to every action, not just the search.
 //   - "admin": a logged-in Admin or Employee acting from the admin
 //     dashboard. Ownership doesn't apply to staff at all — they can act
-//     on any booking regardless of who it belongs to. Rate limiting
-//     (relevant to the guest path) doesn't apply here either, since the
-//     caller is already authenticated via adminAuth().
-//
-// Critical rule (customer/guest only): a booking created under a
-// customer account can ONLY ever be managed through that account via
-// the guest path. The guest path always rejects such bookings, even
-// with a fully correct PNR + last name — same generic message as a
-// genuine mismatch, so the response never confirms that a PNR/name pair
-// was valid. This rule does not apply to the admin path.
+//     on any booking regardless of who it belongs to.
 // ---------------------------------------------------------------------
 
 export type AuthContext =
@@ -92,7 +83,6 @@ export function verifyOwnership(
   authContext: AuthContext
 ): CancellationCheck {
   if (authContext.type === "admin") {
-    // Staff act on any booking — ownership doesn't apply to them.
     return { ok: true };
   }
 
@@ -127,8 +117,7 @@ export function verifyOwnership(
 
 // Business rules for whether this booking can be cancelled at all —
 // ownership is checked separately via verifyOwnership above. Applies
-// identically to customer, guest, and admin/employee cancellations —
-// staff don't get to cancel a booking that has already departed either.
+// identically to customer, guest, and admin/employee cancellations.
 export function checkCancellationEligibility(
   booking: BookingForCancellation,
   now: Date = new Date()
@@ -145,9 +134,6 @@ export function checkCancellationEligibility(
     return { ok: false, error: "No payment found for this booking", status: 409 };
   }
 
-  // Cancellation is only allowed while the outbound leg hasn't departed
-  // yet — once it has, the trip is already underway and cannot be
-  // cancelled, even if a return leg is still in the future.
   if (booking.trip.departureDateTime < now) {
     return {
       ok: false,
@@ -161,16 +147,9 @@ export function checkCancellationEligibility(
 }
 
 // ---------------------------------------------------------------------
-// Employee cancellation cap — an EMPLOYEE may only process a
-// cancellation whose actual refund payout (finalRefundAmount, i.e. real
-// money leaving the company, not the original booking price) is at or
-// under the limit an Admin has configured. ADMIN is never capped.
-//
-// Safe-by-default: if no limit has been configured yet at all, every
-// employee cancellation is blocked until an Admin sets one — silently
-// allowing unlimited employee refunds because a setting was never
-// touched would be a much worse failure mode than temporarily blocking
-// a legitimate cancellation.
+// Employee cancellation cap — see PricingManager's Employee Cancellation
+// Limit tab. Safe-by-default: no limit configured = every employee
+// cancellation is blocked. ADMIN is never capped.
 // ---------------------------------------------------------------------
 
 export async function checkEmployeeCancellationLimit(
@@ -226,12 +205,6 @@ export async function computeRefundBreakdown(
       now
     );
 
-  // Real Stripe fee % from the original payment, applied to the
-  // cancellation-tier refund amount (not the original amount) — per
-  // agreed policy. Missing data (older bookings, or a fee lookup that
-  // failed at payment time) degrades gracefully to no fee deduction,
-  // logged for manual accounting review rather than blocking the
-  // customer's ability to cancel.
   let stripeFeeOnRefund = 0;
   if (payment.stripeFeeAmount != null && payment.amount > 0) {
     const originalFeeRate = payment.stripeFeeAmount / payment.amount;
@@ -257,29 +230,69 @@ export async function computeRefundBreakdown(
 }
 
 // ---------------------------------------------------------------------
+// Whether this booking's cancellation cannot proceed automatically
+// because there's a real refund owed but no Stripe payment_intent on
+// file to refund against (missing/legacy/manually-seeded payment data).
+// Exposed so the admin preview route can warn the caller BEFORE they
+// go through the retype-to-confirm step, instead of only discovering
+// the block at execution time. Only an ADMIN may resolve this via the
+// manual override path in executeCancellation below — see
+// AdminCancelBookingModal.tsx and the admin /cancel route.
+// ---------------------------------------------------------------------
+
+export function bookingRequiresManualRefund(
+  booking: BookingForCancellation,
+  breakdown: RefundBreakdown
+): boolean {
+  return breakdown.finalRefundAmount > 0 && !booking.payment?.stripePaymentIntentId;
+}
+
+// ---------------------------------------------------------------------
 // Executes the cancellation: issues the real Stripe refund, then marks
 // the booking(s) CANCELLED and the payment REFUNDED, then sends the
 // confirmation email best-effort. Shared by the customer-facing and
 // admin-facing /cancel routes so this financially sensitive sequence
-// exists exactly once — see api/bookings/[id]/cancel/route.ts and
-// api/admin/bookings/[id]/cancel/route.ts.
+// exists exactly once.
+//
+// `cancelledByStaff` controls only the wording of the customer-facing
+// email — it does not change any refund/DB logic.
+//
+// `manualOverride`, when present, is ONLY ever honored by the caller
+// after independently confirming session.user.role === "ADMIN" — this
+// function does not re-check role itself (it has no access to the
+// session), so callers MUST gate this themselves. When present and the
+// booking actually needs it (see bookingRequiresManualRefund), the real
+// Stripe refund call is skipped entirely (impossible anyway — there's
+// no payment_intent to refund against) and an AdminAuditLog row is
+// written in the same transaction as the booking/payment update, so
+// this bypass of the normal "refuse rather than lose money silently"
+// guard is always traceable later, even though Vercel's own request
+// logs are not durable.
 //
 // Assumes ownership + eligibility (+ employee limit, where relevant)
 // have already been checked by the caller.
 // ---------------------------------------------------------------------
 
 export type ExecuteCancellationResult =
-  | { ok: true; stripeRefundId: string | null }
+  | { ok: true; stripeRefundId: string | null; manualOverrideUsed: boolean }
   | { ok: false; error: string; status: number; stripeRefundId?: string | null };
 
 export async function executeCancellation(
   booking: BookingForCancellation,
-  breakdown: RefundBreakdown
+  breakdown: RefundBreakdown,
+  cancelledByStaff: boolean = false,
+  manualOverride?: { adminId: number }
 ): Promise<ExecuteCancellationResult> {
+  const needsManualRefund = bookingRequiresManualRefund(booking, breakdown);
+
   // Guard: can't safely refund real money without a payment_intent to
-  // refund against. Refuse the whole operation rather than cancel the
-  // booking without actually returning any money.
-  if (breakdown.finalRefundAmount > 0 && !booking.payment!.stripePaymentIntentId) {
+  // refund against. Refuse the whole operation UNLESS an Admin has
+  // explicitly opted into the manual-override path (see doc comment
+  // above) — losing a customer's money silently is still worse than
+  // refusing, but an Admin asserting "I've handled this outside the
+  // system" is a legitimate, auditable escape hatch for legacy/seeded
+  // data that was never going to have a real Stripe refund to issue.
+  if (needsManualRefund && !manualOverride) {
     console.error(
       `Booking ${booking.id}: cancellation blocked — refund of ${breakdown.finalRefundAmount} ` +
         `owed but payment ${booking.payment!.id} has no stripePaymentIntentId on file.`
@@ -292,15 +305,9 @@ export async function executeCancellation(
     };
   }
 
-  // ---- Issue the Stripe refund first ----
-  // Idempotency key tied to this booking's id: if this whole request
-  // gets retried (e.g. the refund succeeded but our own DB update below
-  // failed, and the caller retries), Stripe recognizes the same key and
-  // returns the ORIGINAL refund instead of creating a second one. This
-  // is what makes "please try again" a genuinely safe instruction below,
-  // instead of a risk of double refunding.
+  // ---- Issue the Stripe refund first (skipped entirely under manual override) ----
   let stripeRefundId: string | null = null;
-  if (breakdown.finalRefundAmount > 0) {
+  if (breakdown.finalRefundAmount > 0 && !needsManualRefund) {
     const refund = await stripe.refunds.create(
       {
         payment_intent: booking.payment!.stripePaymentIntentId!,
@@ -311,9 +318,12 @@ export async function executeCancellation(
     stripeRefundId = refund.id;
   }
 
-  // ---- Now update our records, only after the refund succeeded ----
+  const manualOverrideUsed = needsManualRefund && !!manualOverride;
+
+  // ---- Now update our records, only after the refund succeeded
+  //      (or was knowingly bypassed via manual override) ----
   const performDbUpdates = () => {
-    const writes = [
+    const writes: Prisma.PrismaPromise<unknown>[] = [
       prisma.booking.update({
         where: { id: booking.id },
         data: { status: "CANCELLED" },
@@ -324,13 +334,30 @@ export async function executeCancellation(
       }),
     ];
 
-    // Round-trip: cancelling the outbound cancels the linked return leg
-    // too — they were always sold, held, and paid for as a pair.
     if (booking.linkedBooking) {
       writes.push(
         prisma.booking.update({
           where: { id: booking.linkedBooking.id },
           data: { status: "CANCELLED" },
+        })
+      );
+    }
+
+    // Durable audit trail for this specific bypass — written in the
+    // same transaction as the cancellation itself, so it can never
+    // exist without the cancellation it documents (or vice versa).
+    if (manualOverrideUsed) {
+      writes.push(
+        prisma.adminAuditLog.create({
+          data: {
+            eventType: "MANUAL_CANCELLATION_OVERRIDE",
+            bookingId: booking.id,
+            adminId: manualOverride!.adminId,
+            detail:
+              `Booking ${booking.id} cancelled with no Stripe payment_intent on file. ` +
+              `Refund of ${breakdown.finalRefundAmount.toFixed(2)} TND was NOT issued via Stripe — ` +
+              `Admin ${manualOverride!.adminId} confirmed this was handled manually or was not owed.`,
+          },
         })
       );
     }
@@ -355,9 +382,6 @@ export async function executeCancellation(
   }
 
   if (dbError) {
-    // The refund already happened at Stripe — this is a serious
-    // reconciliation gap, not a routine failure. Logged loudly so it
-    // gets manual attention.
     console.error(
       `CRITICAL: Stripe refund ${stripeRefundId} succeeded for booking ${booking.id} ` +
         `but the database update failed after ${MAX_DB_ATTEMPTS} attempts. Manual reconciliation needed.`,
@@ -373,9 +397,6 @@ export async function executeCancellation(
   }
 
   // ---- Send the cancellation email (best-effort) ----
-  // The cancellation itself has already fully succeeded at this point
-  // (refund issued, DB updated), so a failure here must never be
-  // treated as a failure of the cancellation — it's just logged.
   const firstPassenger = booking.passengers[0];
   if (firstPassenger) {
     const { html, text } = buildCancellationEmail({
@@ -386,6 +407,7 @@ export async function executeCancellation(
       destination: booking.trip.destination,
       departureDateTime: booking.trip.departureDateTime.toISOString(),
       aircraftType: booking.trip.plane.aircraftType,
+      cancelledByStaff,
       returnLeg: booking.linkedBooking
         ? {
             departingPlace: booking.linkedBooking.trip.departingPlace,
@@ -409,5 +431,5 @@ export async function executeCancellation(
     }
   }
 
-  return { ok: true, stripeRefundId };
+  return { ok: true, stripeRefundId, manualOverrideUsed };
 }

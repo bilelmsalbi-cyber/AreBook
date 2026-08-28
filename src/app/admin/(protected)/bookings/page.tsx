@@ -1,9 +1,14 @@
+import { redirect } from "next/navigation";
+import { adminAuth } from "@/lib/auth-admin";
 import { prisma } from "@/lib/prisma";
 import BookingsManager from "@/components/admin/BookingsManager";
 
 export default async function AdminBookingsPage() {
-  // Fetched here (not via API) purely to populate the "Trip" search tab's
-  // dropdown — same pattern as the plane dropdown on the Trips page.
+  const session = await adminAuth();
+  if (!session?.user) {
+    redirect("/admin/login");
+  }
+
   const trips = await prisma.trip.findMany({
     orderBy: { departureDateTime: "asc" },
     select: {
@@ -25,7 +30,7 @@ export default async function AdminBookingsPage() {
 
   return (
     <div className="p-8">
-      <BookingsManager tripOptions={tripOptions} />
+      <BookingsManager tripOptions={tripOptions} role={session.user.role ?? ""} />
     </div>
   );
 }

@@ -6,18 +6,9 @@ import {
   computeRefundBreakdown,
   verifyOwnership,
   checkEmployeeCancellationLimit,
+  bookingRequiresManualRefund,
   type AuthContext,
 } from "@/lib/cancellation";
-
-// ---------------------------------------------------------------------
-// POST /api/admin/bookings/[id]/cancel/preview
-// Read-only: computes what a cancellation would refund, without
-// cancelling anything or contacting Stripe. Available to both ADMIN and
-// EMPLOYEE — unlike other admin mutation routes, this feature is
-// intentionally NOT gated by requireAdminRole (see rationale in
-// lib/cancellation.ts: employees are capped by amount instead, via
-// checkEmployeeCancellationLimit).
-// ---------------------------------------------------------------------
 
 export async function POST(
   request: NextRequest,
@@ -63,10 +54,6 @@ export async function POST(
 
     const breakdown = await computeRefundBreakdown(booking);
 
-    // Checked in preview too (not just at execution) so an employee
-    // sees the "ask an Admin" message immediately, before going through
-    // the retype-to-confirm step for a cancellation that will be
-    // refused anyway.
     const limitCheck = await checkEmployeeCancellationLimit(
       breakdown.finalRefundAmount,
       role
@@ -75,7 +62,18 @@ export async function POST(
       return NextResponse.json({ error: limitCheck.error }, { status: limitCheck.status });
     }
 
-    return NextResponse.json({ bookingId: booking.id, ...breakdown });
+    // Surfaced here (read-only check, nothing mutated) so the admin
+    // dashboard can warn the caller BEFORE the retype-to-confirm step,
+    // instead of only discovering the automatic-refund block at
+    // execution time. Only ADMIN can act on this flag — EMPLOYEE sees
+    // it too but the UI must not offer the override to them.
+    const requiresManualRefund = bookingRequiresManualRefund(booking, breakdown);
+
+    return NextResponse.json({
+      bookingId: booking.id,
+      ...breakdown,
+      requiresManualRefund,
+    });
   } catch (error) {
     console.error("Error previewing admin cancellation:", error);
     return NextResponse.json(

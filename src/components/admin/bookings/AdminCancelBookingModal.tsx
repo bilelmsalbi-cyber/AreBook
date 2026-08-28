@@ -11,6 +11,14 @@ type Breakdown = {
   amountAfterCancellationDeduction: number;
   stripeFeeOnRefund: number;
   finalRefundAmount: number;
+  requiresManualRefund: boolean;
+};
+
+type ConfirmResult = {
+  bookingId: number;
+  status: "CANCELLED";
+  stripeRefundId: string | null;
+  manualOverrideUsed: boolean;
 };
 
 type Stage =
@@ -25,39 +33,29 @@ function money(n: number) {
   return n.toFixed(2);
 }
 
-// Same mount/unmount-on-demand pattern as PassengersModal and the
-// customer-facing CancelBookingModal: rendered only while a booking is
-// selected for cancellation, so state always starts clean.
-//
-// Confirmation step retypes the booking ID (not the PNR) — unlike the
-// customer flow, this is the identifier the admin dashboard searches
-// and displays by everywhere, and it's always present even before the
-// round-trip pnr bug fix era's edge cases.
-//
-// No ownership restrictions apply here (see verifyOwnership's "admin"
-// branch in lib/cancellation.ts) — any Admin or Employee can cancel any
-// eligible booking. Employees are capped by refund amount server-side;
-// if that cap is exceeded, the preview call below surfaces the server's
-// error message directly (e.g. "ask an Admin to process this").
+// Same mount/unmount-on-demand pattern as the other cancellation
+// modals. Confirmation retypes the PNR (matches the customer-facing
+// modal). `role` gates the manual-override path: only ADMIN ever sees
+// or can trigger it — EMPLOYEE hitting a booking with no Stripe
+// payment_intent on file just sees the plain refusal, no escape hatch.
 export default function AdminCancelBookingModal({
   bookingId,
   isRoundTrip,
+  role,
   onClose,
   onCancelled,
 }: {
   bookingId: number;
   isRoundTrip: boolean;
+  role: "ADMIN" | "EMPLOYEE";
   onClose: () => void;
   onCancelled: (bookingId: number) => void;
 }) {
   const [stage, setStage] = useState<Stage>("loading-preview");
   const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
+  const [confirmResult, setConfirmResult] = useState<ConfirmResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Extra safety step: must retype the booking ID exactly before the
-  // Confirm button becomes clickable — a fat-finger tap shouldn't be
-  // enough to actually cancel a paid booking, same rationale as the
-  // customer-facing modal's PNR retype.
-  const [idConfirmInput, setIdConfirmInput] = useState("");
+  const [pnrConfirmInput, setPnrConfirmInput] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -88,16 +86,25 @@ export default function AdminCancelBookingModal({
     // .eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
-  const idConfirmed = idConfirmInput.trim() === String(bookingId);
+  const pnrConfirmed =
+    !!breakdown?.pnr && pnrConfirmInput.trim().toUpperCase() === breakdown.pnr.toUpperCase();
 
-  function handleConfirm() {
-    if (stage !== "ready" || !idConfirmed) return;
+  // Only ever true when the server said this booking needs it AND the
+  // current caller is ADMIN — EMPLOYEE never gets this button, even if
+  // requiresManualRefund came back true from the preview.
+  const canUseManualOverride =
+    !!breakdown?.requiresManualRefund && role === "ADMIN";
+
+  function submitCancellation(manualOverride: boolean) {
+    if (stage !== "ready" || !pnrConfirmed) return;
 
     setStage("confirming");
     setErrorMessage(null);
 
     fetch(`/api/admin/bookings/${bookingId}/cancel`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manualOverride }),
     })
       .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
@@ -106,6 +113,12 @@ export default function AdminCancelBookingModal({
           setStage("confirm-error");
           return;
         }
+        setConfirmResult({
+          bookingId: data.bookingId,
+          status: data.status,
+          stripeRefundId: data.stripeRefundId ?? null,
+          manualOverrideUsed: !!data.manualOverrideUsed,
+        });
         setStage("success");
         onCancelled(bookingId);
       })
@@ -133,12 +146,10 @@ export default function AdminCancelBookingModal({
           )}
         </div>
 
-        {/* ---- Loading the preview ---- */}
         {stage === "loading-preview" && (
           <p className="mt-4 text-sm text-[#64748B]">Loading cancellation details...</p>
         )}
 
-        {/* ---- Preview failed to load (not eligible, over employee limit, network error, etc.) ---- */}
         {stage === "preview-error" && (
           <>
             <p className="mt-4 text-sm text-red-400">{errorMessage}</p>
@@ -152,7 +163,6 @@ export default function AdminCancelBookingModal({
           </>
         )}
 
-        {/* ---- Ready to confirm, or confirming, or confirm failed ---- */}
         {(stage === "ready" || stage === "confirming" || stage === "confirm-error") &&
           breakdown && (
             <>
@@ -160,6 +170,16 @@ export default function AdminCancelBookingModal({
                 <p className="mt-4 rounded-lg bg-[#0B0F19] p-3 text-xs text-[#94A3B8]">
                   This is a round-trip booking — cancelling it cancels both the outbound
                   and return flights together.
+                </p>
+              )}
+
+              {breakdown.requiresManualRefund && (
+                <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400">
+                  ⚠ This booking has no Stripe payment record on file — the refund can&apos;t
+                  be issued automatically.{" "}
+                  {role === "ADMIN"
+                    ? "As an Admin, you can confirm you've handled this manually (or that no refund is actually owed) and cancel anyway."
+                    : "Only an Admin can process this cancellation."}
                 </p>
               )}
 
@@ -190,14 +210,14 @@ export default function AdminCancelBookingModal({
 
               <div className="mt-4">
                 <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#64748B]">
-                  Type booking ID <span className="font-mono">{bookingId}</span> to confirm
+                  Type PNR <span className="font-mono">{breakdown.pnr}</span> to confirm
                 </label>
                 <input
                   type="text"
-                  value={idConfirmInput}
-                  onChange={(e) => setIdConfirmInput(e.target.value)}
+                  value={pnrConfirmInput}
+                  onChange={(e) => setPnrConfirmInput(e.target.value)}
                   disabled={stage === "confirming"}
-                  placeholder={String(bookingId)}
+                  placeholder={breakdown.pnr ?? ""}
                   className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none transition-colors duration-150 focus:border-[#3B82F6] disabled:opacity-60"
                 />
               </div>
@@ -215,27 +235,64 @@ export default function AdminCancelBookingModal({
                 >
                   Keep Booking
                 </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={stage === "confirming" || !idConfirmed}
-                  className="flex-1 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-red-600 disabled:opacity-50"
-                >
-                  {stage === "confirming" ? "Cancelling..." : "Confirm Cancellation"}
-                </button>
+
+                {/* Normal automatic-refund path — hidden when the
+                    booking requires manual handling, since it would
+                    just fail with the same refusal every time. */}
+                {!breakdown.requiresManualRefund && (
+                  <button
+                    type="button"
+                    onClick={() => submitCancellation(false)}
+                    disabled={stage === "confirming" || !pnrConfirmed}
+                    className="flex-1 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-red-600 disabled:opacity-50"
+                  >
+                    {stage === "confirming" ? "Cancelling..." : "Confirm Cancellation"}
+                  </button>
+                )}
+
+                {/* Manual override path — ADMIN only, distinctly
+                    labeled so clicking it is itself an explicit,
+                    unambiguous choice (in addition to the PNR retype). */}
+                {breakdown.requiresManualRefund && canUseManualOverride && (
+                  <button
+                    type="button"
+                    onClick={() => submitCancellation(true)}
+                    disabled={stage === "confirming" || !pnrConfirmed}
+                    className="flex-1 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {stage === "confirming"
+                      ? "Cancelling..."
+                      : "Confirm Cancellation (No Automatic Refund)"}
+                  </button>
+                )}
               </div>
             </>
           )}
 
-        {/* ---- Success ---- */}
         {stage === "success" && breakdown && (
           <>
-            <p className="mt-4 text-sm text-[#CBD5E1]">
-              Booking cancelled. A refund of{" "}
-              <span className="font-semibold text-white">
-                {money(breakdown.finalRefundAmount)} TND
-              </span>{" "}
-              is on its way back to the customer&apos;s original payment method.
+            {confirmResult?.manualOverrideUsed ? (
+              <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
+                ✓ Booking cancelled. No Stripe refund was issued — this was recorded as a
+                manual override, confirmed by you as an Admin. This action has been logged
+                for audit purposes.
+              </p>
+            ) : confirmResult?.stripeRefundId ? (
+              <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                ✓ Refund confirmed via Stripe (ref: {confirmResult.stripeRefundId}).{" "}
+                <span className="font-semibold">
+                  {money(breakdown.finalRefundAmount)} TND
+                </span>{" "}
+                has been returned to the customer&apos;s original payment method.
+              </p>
+            ) : (
+              <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-400">
+                ✓ Booking cancelled. No refund was due (
+                {money(breakdown.finalRefundAmount)} TND).
+              </p>
+            )}
+            <p className="mt-3 text-xs text-[#64748B]">
+              A cancellation confirmation email has also been sent to the customer.
             </p>
             <button
               type="button"

@@ -210,6 +210,17 @@ model EmployeeCancellationLimit {
   @@map("employee_cancellation_limits")
 }
 
+model AdminAuditLog {
+  id        Int                 @id @default(autoincrement())
+  eventType AdminAuditEventType
+  bookingId Int
+  adminId   Int?
+  detail    String
+  createdAt DateTime            @default(now())
+
+  @@map("admin_audit_logs")
+}
+
 enum AdminRole {
   ADMIN
   EMPLOYEE
@@ -236,4 +247,9 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+enum AdminAuditEventType {
+  MANUAL_CANCELLATION_OVERRIDE
+  REFUND_RECONCILIATION_FAILURE
 }

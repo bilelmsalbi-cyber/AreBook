@@ -21,6 +21,13 @@ type CancellationEmailData = {
   amountAfterCancellationDeduction: number;
   stripeFeeOnRefund: number;
   finalRefundAmount: number;
+
+  // True when this cancellation was initiated from the admin dashboard
+  // (by an ADMIN or EMPLOYEE) rather than by the customer/guest
+  // themselves — changes the wording of the intro and closing lines so
+  // the customer isn't told "as requested" for something they didn't
+  // request. See executeCancellation in lib/cancellation.ts.
+  cancelledByStaff?: boolean;
 };
 
 function renderLegHtml(label: string | null, leg: FlightLegData) {
@@ -54,6 +61,17 @@ export function buildCancellationEmail(data: CancellationEmailData) {
     ? `${renderLegText("Outbound", outbound)}\n\n${renderLegText("Return", data.returnLeg)}`
     : renderLegText(null, outbound);
 
+  // Two distinct intro/closing pairs depending on who initiated the
+  // cancellation — the customer should never read "as requested" for a
+  // cancellation someone else made on their behalf.
+  const introText = data.cancelledByStaff
+    ? "Our team has cancelled your booking, and a refund has been issued to your original payment method."
+    : "Your booking has been cancelled as requested, and a refund has been issued to your original payment method.";
+
+  const closingText = data.cancelledByStaff
+    ? "If you have any questions about this cancellation, please contact our support team — we're happy to help."
+    : "Refunds are returned to your original payment method and may take a few business days to appear, depending on your bank.";
+
   const html = `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #16324F;">
       <div style="background: linear-gradient(90deg, #DC2626, #F87171); padding: 24px; text-align: center;">
@@ -61,7 +79,7 @@ export function buildCancellationEmail(data: CancellationEmailData) {
       </div>
       <div style="padding: 24px;">
         <p>Dear ${data.firstName},</p>
-        <p>Your booking has been cancelled as requested, and a refund has been issued to your original payment method.</p>
+        <p>${introText}</p>
 
         <div style="background: #F3F9FF; border: 1px solid #DCEEFF; border-radius: 12px; padding: 16px; text-align: center; margin: 20px 0;">
           <p style="font-size: 12px; text-transform: uppercase; color: #5C7A96; margin: 0;">Booking Reference (PNR)</p>
@@ -92,8 +110,7 @@ export function buildCancellationEmail(data: CancellationEmailData) {
         </div>
 
         <p style="margin-top: 16px; font-size: 13px; color: #5C7A96;">
-          Refunds are returned to your original payment method and may take a few business days
-          to appear, depending on your bank.
+          ${closingText}
         </p>
       </div>
     </div>
@@ -101,7 +118,7 @@ export function buildCancellationEmail(data: CancellationEmailData) {
 
   const text = `Dear ${data.firstName},
 
-Your booking has been cancelled as requested, and a refund has been issued to your original payment method.
+${introText}
 
 Booking Reference (PNR): ${data.pnr}
 
@@ -113,7 +130,7 @@ Amount after cancellation fee: ${data.amountAfterCancellationDeduction} TND
 Stripe processing fee: -${data.stripeFeeOnRefund} TND
 Refunded to you: ${data.finalRefundAmount} TND
 
-Refunds are returned to your original payment method and may take a few business days to appear, depending on your bank.`;
+${closingText}`;
 
   return { html, text };
 }

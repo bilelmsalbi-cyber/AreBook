@@ -9,11 +9,13 @@ export default async function AdminPricingPage() {
     redirect("/admin/login");
   }
 
-  const [services, discountTiers, cancellationTiers] = await Promise.all([
-    prisma.servicePrice.findMany({ orderBy: { serviceType: "asc" } }),
-    prisma.roundTripDiscountTier.findMany({ orderBy: { minTotal: "asc" } }),
-    prisma.cancellationTier.findMany({ orderBy: { minHoursBefore: "asc" } }),
-  ]);
+  const [services, discountTiers, cancellationTiers, employeeCancellationLimit] =
+    await Promise.all([
+      prisma.servicePrice.findMany({ orderBy: { serviceType: "asc" } }),
+      prisma.roundTripDiscountTier.findMany({ orderBy: { minTotal: "asc" } }),
+      prisma.cancellationTier.findMany({ orderBy: { minHoursBefore: "asc" } }),
+      prisma.employeeCancellationLimit.findFirst(),
+    ]);
 
   return (
     <div className="p-8">
@@ -31,6 +33,14 @@ export default async function AdminPricingPage() {
           ...t,
           updatedAt: t.updatedAt.toISOString(),
         }))}
+        initialEmployeeCancellationLimit={
+          employeeCancellationLimit
+            ? {
+                ...employeeCancellationLimit,
+                updatedAt: employeeCancellationLimit.updatedAt.toISOString(),
+              }
+            : null
+        }
       />
     </div>
   );

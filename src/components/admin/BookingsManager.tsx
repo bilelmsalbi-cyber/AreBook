@@ -14,8 +14,6 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: "REFUNDED", label: "Refunded" },
 ];
 
-// Booking.status — distinct from payment status above. Included so the
-// admin/employee can filter for cancelled bookings specifically.
 const BOOKING_STATUS_OPTIONS = [
   { value: "", label: "Any" },
   { value: "PENDING", label: "Pending" },
@@ -38,8 +36,6 @@ function passengerNames(booking: BookingResult) {
     .join(", ");
 }
 
-// A round-trip return leg has no Payment/pnr of its own — both resolve
-// back through linkedBooking. See api/admin/bookings/route.ts.
 function paymentLabel(booking: BookingResult) {
   const effectivePayment = booking.payment ?? booking.linkedBooking?.payment ?? null;
   if (!effectivePayment) return "Not paid yet";
@@ -53,27 +49,18 @@ function pnrLabel(booking: BookingResult) {
   return booking.pnr || booking.linkedBooking?.pnr || "—";
 }
 
-// Round-trip: only the outbound leg's Payment holds the amount (covers
-// both legs). See api/admin/bookings/route.ts.
 function priceLabel(booking: BookingResult) {
   const effectivePayment = booking.payment ?? booking.linkedBooking?.payment ?? null;
   if (!effectivePayment) return "—";
   return `$${effectivePayment.amount.toFixed(2)}`;
 }
 
-// Assigned at booking creation time (see lib/cancellation.ts) — always
-// present directly on the outbound row when the booking belongs to an
-// account, never only through linkedBooking.
 function accountLabel(booking: BookingResult) {
   if (!booking.customer) return "Guest booking";
   const { firstName, lastName, email } = booking.customer.person;
   return `${firstName} ${lastName} (${email})`;
 }
 
-// A booking is "past" only when every leg it includes has already
-// departed. One-way: just the outbound leg. Round-trip: both outbound
-// and return must be in the past — if the return leg is still upcoming,
-// the booking as a whole is still upcoming.
 function isPastBooking(booking: BookingResult) {
   const now = Date.now();
   const outboundPast = new Date(booking.trip.departureDateTime).getTime() < now;
@@ -82,18 +69,63 @@ function isPastBooking(booking: BookingResult) {
   return outboundPast && returnPast;
 }
 
-// Mirrors checkCancellationEligibility in lib/cancellation.ts (status
-// must be CONFIRMED, outbound leg not yet departed) — this is just the
-// UI's guess of whether to show the Cancel action at all; the real
-// eligibility check always happens server-side regardless.
 function isCancellable(booking: BookingResult) {
   return booking.status === "CONFIRMED" && !isPastBooking(booking);
 }
 
-// Facebook-style "⋮" actions menu — used both in the desktop table row
-// and the mobile card layout, so the two only ever need to stay in sync
-// through this one component. Closes on any tap outside it (invisible
-// full-screen backdrop button), same pattern as the modals in this app.
+// One leg of a trip (outbound or return) rendered as a clickable label —
+// tapping it reveals aircraft type + departure/arrival times inline,
+// instead of a permanently-visible aircraft-type line that was ambiguous
+// on round-trip bookings (which leg does it belong to?). Each leg owns
+// its own open/closed state, so expanding the outbound leg never affects
+// the return leg's row and vice versa.
+function TripLegButton({
+  leg,
+  prefix,
+}: {
+  leg: {
+    departingPlace: string;
+    destination: string;
+    departureDateTime: string;
+    arrivalDateTime: string;
+    plane: { aircraftType: string };
+  };
+  prefix?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`text-left underline decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-[#3B82F6] ${
+          prefix ? "text-[#3B82F6]" : "text-[#CBD5E1]"
+        }`}
+      >
+        {prefix ? `${prefix} ` : ""}
+        {leg.departingPlace} → {leg.destination}
+      </button>
+      {open && (
+        <div className="mt-1 rounded-lg border border-[#1E293B] bg-[#0B0F19] p-2 text-xs text-[#94A3B8]">
+          <p>{leg.plane.aircraftType}</p>
+          <p>Departs: {formatDateTime(leg.departureDateTime)}</p>
+          <p>Arrives: {formatDateTime(leg.arrivalDateTime)}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TripCell({ booking }: { booking: BookingResult }) {
+  return (
+    <div className="space-y-1">
+      <TripLegButton leg={booking.trip} />
+      {booking.returnTrip && <TripLegButton leg={booking.returnTrip} prefix="↩" />}
+    </div>
+  );
+}
+
 function ActionsMenu({
   isOpen,
   onToggle,
@@ -169,8 +201,10 @@ const emptyFilters = {
 
 export default function BookingsManager({
   tripOptions,
+  role,
 }: {
   tripOptions: TripOption[];
+  role: "ADMIN" | "EMPLOYEE";
 }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [results, setResults] = useState<BookingResult[]>([]);
@@ -236,10 +270,6 @@ export default function BookingsManager({
     setExcludePast(true);
   }
 
-  // After a cancellation succeeds, re-run the current search so the
-  // row's status (and the payment/cancelled-status filters, if active)
-  // reflect reality immediately instead of showing stale data until the
-  // next manual search.
   function handleCancelled() {
     setCancellingBooking(null);
     if (hasSearched) runSearch();
@@ -427,24 +457,14 @@ export default function BookingsManager({
             {visibleResults.map((booking) => (
               <tr
                 key={booking.id}
-                className="border-t border-[#1E293B] text-[#CBD5E1]"
+                className="border-t border-[#1E293B] text-[#CBD5E1] align-top"
               >
                 <td className="px-4 py-3">#{booking.id}</td>
                 <td className="px-4 py-3">{pnrLabel(booking)}</td>
                 <td className="px-4 py-3">{passengerNames(booking)}</td>
                 <td className="px-4 py-3 text-xs">{accountLabel(booking)}</td>
                 <td className="px-4 py-3">
-                  <div>
-                    {booking.trip.departingPlace} → {booking.trip.destination}
-                  </div>
-                  {booking.returnTrip && (
-                    <div className="mt-0.5 text-[#3B82F6]">
-                      ↩ {booking.returnTrip.departingPlace} → {booking.returnTrip.destination}
-                    </div>
-                  )}
-                  <div className="text-xs text-[#64748B]">
-                    {booking.trip.plane.aircraftType}
-                  </div>
+                  <TripCell booking={booking} />
                 </td>
                 <td className="px-4 py-3">{booking.seatClass}</td>
                 <td className="px-4 py-3">{booking.status}</td>
@@ -521,16 +541,8 @@ export default function BookingsManager({
               />
             </div>
 
-            <div className="mt-3 space-y-1 border-t border-[#1E293B] pt-3 text-xs text-[#94A3B8]">
-              <p>
-                {booking.trip.departingPlace} → {booking.trip.destination}
-                {booking.returnTrip && (
-                  <span className="text-[#3B82F6]">
-                    {" "}
-                    ↩ {booking.returnTrip.departingPlace} → {booking.returnTrip.destination}
-                  </span>
-                )}
-              </p>
+            <div className="mt-3 space-y-2 border-t border-[#1E293B] pt-3 text-xs text-[#94A3B8]">
+              <TripCell booking={booking} />
               <p>{accountLabel(booking)}</p>
               <p>
                 {booking.seatClass} · {booking.status} · {paymentLabel(booking)} ·{" "}
@@ -551,11 +563,12 @@ export default function BookingsManager({
 
       {cancellingBooking !== null && (
         <AdminCancelBookingModal
-          bookingId={cancellingBooking.id}
-          isRoundTrip={cancellingBooking.tripType === "ROUND_TRIP"}
-          onClose={() => setCancellingBooking(null)}
-          onCancelled={handleCancelled}
-        />
+         bookingId={cancellingBooking.id}
+         isRoundTrip={cancellingBooking.tripType === "ROUND_TRIP"}
+         role={role}
+         onClose={() => setCancellingBooking(null)}
+         onCancelled={handleCancelled}
+/>
       )}
     </div>
   );
