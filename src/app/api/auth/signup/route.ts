@@ -1,34 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
+import { sendVerificationEmail } from "@/lib/emailVerification";
+import { isRateLimited } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const {
-      firstName,
-      lastName,
-      email,
-      phone,
-      gender,
-      dateBirth,
-      password,
-    } = body;
-
-    // Basic validation
-    if (
-      !firstName ||
-      !lastName ||
-      !email ||
-      !phone ||
-      !gender ||
-      !dateBirth ||
-      !password
-    ) {
+    const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+    if (isRateLimited(`signup:${ip}`)) {
       return NextResponse.json(
-        { error: "All fields are required." },
-        { status: 400 }
+        { error: "Too many requests. Please try again in a minute." },
+        { status: 429 }
       );
+    }
+
+    const body = await request.json();
+    const { firstName, lastName, email, phone, gender, dateBirth, password } = body;
+
+    if (!firstName || !lastName || !email || !phone || !gender || !dateBirth || !password) {
+      return NextResponse.json({ error: "All fields are required." }, { status: 400 });
     }
 
     if (password.length < 8) {
@@ -38,9 +28,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if email already exists (on Person, since Customer links to it)
+    const normalizedEmail = (email as string).trim().toLowerCase();
+
     const existing = await prisma.person.findFirst({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { customer: true },
     });
 
@@ -60,7 +51,7 @@ export async function POST(request: Request) {
           create: {
             firstName,
             lastName,
-            email,
+            email: normalizedEmail,
             phone,
             gender,
             dateBirth: new Date(dateBirth),
@@ -70,20 +61,14 @@ export async function POST(request: Request) {
       include: { person: true },
     });
 
+    await sendVerificationEmail(customer.id, customer.person.email, customer.person.firstName);
+
     return NextResponse.json({
       success: true,
-      customer: {
-        id: customer.id,
-        email: customer.person.email,
-        firstName: customer.person.firstName,
-        lastName: customer.person.lastName,
-      },
+      message: "Account created. Please check your email to confirm your address before logging in.",
     });
   } catch (error) {
     console.error("Signup error:", error);
-    return NextResponse.json(
-      { error: "Something went wrong. Please try again." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

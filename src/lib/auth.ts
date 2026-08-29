@@ -1,9 +1,14 @@
 import type { JWT } from "next-auth/jwt";
 import type { Session } from "next-auth";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email_not_verified";
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -18,18 +23,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
+        const normalizedEmail = (credentials.email as string).trim().toLowerCase();
+
         const customer = await prisma.customer.findFirst({
-          where: {
-            person: {
-              email: credentials.email as string,
-            },
-          },
-          include: {
-            person: true,
-          },
+          where: { person: { email: normalizedEmail } },
+          include: { person: true },
         });
 
-        if (!customer) {
+        if (!customer || !customer.passwordHash) {
           return null;
         }
 
@@ -42,13 +43,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        // This object becomes the JWT payload (see callbacks below)
+        if (!customer.emailVerified) {
+          throw new EmailNotVerifiedError();
+        }
+
         return {
           id: customer.id.toString(),
           email: customer.person.email,
           name: `${customer.person.firstName} ${customer.person.lastName}`,
         };
       },
+    }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     }),
   ],
   session: {
@@ -60,9 +68,84 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   callbacks: {
+        async signIn({ user, account, profile }) {
+      if (account?.provider !== "google") {
+        return true;
+      }
+
+            if (account.provider === "google" && profile?.email_verified === false) {
+        return false;
+      }
+
+      const email = user.email?.trim().toLowerCase();
+      if (!email) return false;
+
+      const googleId = account.providerAccountId;
+
+      const existingCustomer = await prisma.customer.findFirst({
+        where: {
+          OR: [{ googleId }, { person: { email } }],
+        },
+        include: { person: true },
+      });
+
+      let customerId: number;
+
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+
+                const updates: { emailVerified?: Date; googleId?: string; passwordHash?: null } = {};
+        if (!existingCustomer.emailVerified) {
+          updates.emailVerified = new Date();
+          if (existingCustomer.passwordHash) {
+            updates.passwordHash = null;
+          }
+        }
+        if (!existingCustomer.googleId) {
+          updates.googleId = googleId;
+        }
+        if (Object.keys(updates).length > 0) {
+          await prisma.customer.update({ where: { id: customerId }, data: updates });
+        }
+      } else {
+        try {
+          const [firstName, ...rest] = (user.name || "Google User").split(" ");
+          const created = await prisma.customer.create({
+            data: {
+              emailVerified: new Date(),
+              googleId,
+              person: {
+                create: {
+                  firstName: firstName || "Google",
+                  lastName: rest.join(" ") || "User",
+                  email,
+                  phone: "",
+                  gender: "",
+                  dateBirth: new Date("2000-01-01"),
+                },
+              },
+            },
+          });
+          customerId = created.id;
+        } catch {
+          // حالة نادرة: محاولتان متزامنتان أنشأتا نفس الحساب بنفس اللحظة.
+          // بدل الفشل، نبحث مرة ثانية عن الحساب اللي انخلق فعلاً ونستخدمه.
+          const fallback = await prisma.customer.findFirst({
+            where: {
+              OR: [{ googleId }, { person: { email } }],
+            },
+          });
+          if (!fallback) return false;
+          customerId = fallback.id;
+        }
+      }
+
+      (user as { customerId?: string }).customerId = customerId.toString();
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
-        token.customerId = user.id;
+        token.customerId = (user as { customerId?: string }).customerId ?? user.id;
       }
       return token;
     },

@@ -65,10 +65,10 @@ export async function GET(request: NextRequest) {
     conditions.push({ id });
   }
 
-  if (pnrParam) {
+    if (pnrParam) {
     const pnr = pnrParam.trim();
     conditions.push({
-      OR: [{ pnr }, { linkedBooking: { pnr } }],
+      OR: [{ pnr }, { linkedBooking: { pnr } }, { linkedFromBooking: { pnr } }],
     });
   }
 
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     conditions.push({ status: bookingStatusParam });
   }
 
-  if (tripIdParam) {
+    if (tripIdParam) {
     const tripId = Number(tripIdParam);
     if (!Number.isInteger(tripId)) {
       return NextResponse.json(
@@ -139,7 +139,9 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-    conditions.push({ tripId });
+    conditions.push({
+      OR: [{ tripId }, { linkedBooking: { tripId } }, { linkedFromBooking: { tripId } }],
+    });
   }
 
   if (dateParam) {
