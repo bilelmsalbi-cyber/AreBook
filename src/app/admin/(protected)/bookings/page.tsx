@@ -5,9 +5,9 @@ import BookingsManager from "@/components/admin/BookingsManager";
 
 export default async function AdminBookingsPage() {
   const session = await adminAuth();
-  if (!session?.user) {
-    redirect("/admin/login");
-  }
+     if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "EMPLOYEE")) {
+     redirect("/admin/login");
+   }
 
   const trips = await prisma.trip.findMany({
     orderBy: { departureDateTime: "asc" },
@@ -30,7 +30,7 @@ export default async function AdminBookingsPage() {
 
   return (
     <div className="p-8">
-      <BookingsManager tripOptions={tripOptions} role={session.user.role ?? ""} />
+         <BookingsManager tripOptions={tripOptions} role={session.user.role} />
     </div>
   );
 }
