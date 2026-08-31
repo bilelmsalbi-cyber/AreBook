@@ -48,6 +48,7 @@ model CustomerVerificationToken {
 model Admin {
   id           Int       @id @default(autoincrement())
   passwordHash String
+    passkeys      AdminPasskey[]
   firstName    String
   lastName     String
   email        String    @unique
@@ -227,12 +228,31 @@ model EmployeeCancellationLimit {
 model AdminAuditLog {
   id        Int                 @id @default(autoincrement())
   eventType AdminAuditEventType
-  bookingId Int
+  // Nullable الآن: أحداث الدخول مش مرتبطة بحجز خالص
+  bookingId Int?
   adminId   Int?
+  ipAddress String?
   detail    String
   createdAt DateTime            @default(now())
 
   @@map("admin_audit_logs")
+}
+
+model AdminPasskey {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  credentialId String   @unique
+  publicKey    String
+  counter      BigInt   @default(0)
+  deviceLabel  String
+  transports   String?
+
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime?
+
+  @@map("admin_passkeys")
 }
 
 enum AdminRole {
@@ -266,4 +286,6 @@ enum PaymentStatus {
 enum AdminAuditEventType {
   MANUAL_CANCELLATION_OVERRIDE
   REFUND_RECONCILIATION_FAILURE
+  ADMIN_LOGIN_SUCCESS
+  ADMIN_LOGIN_FAILURE
 }

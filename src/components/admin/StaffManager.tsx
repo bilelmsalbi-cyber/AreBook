@@ -14,7 +14,6 @@ type StaffFormState = {
   salary: string;
   role: "ADMIN" | "EMPLOYEE";
   password: string;
-  currentAdminPassword: string;
 };
 
 const emptyForm: StaffFormState = {
@@ -22,12 +21,11 @@ const emptyForm: StaffFormState = {
   lastName: "",
   email: "",
   phone: "",
-  gender: "",
+  gender: "Mr",
   dateBirth: "",
   salary: "",
   role: "EMPLOYEE",
   password: "",
-  currentAdminPassword: "",
 };
 
 function formatDate(iso: string) {
@@ -39,6 +37,14 @@ function formatDate(iso: string) {
 function creatorLabel(staff: StaffMember) {
   if (!staff.createdBy) return "System (initial account)";
   return `${staff.createdBy.firstName} ${staff.createdBy.lastName}`;
+}
+
+function generateStrongPassword(length = 14) {
+  const charset =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
+  const randomValues = new Uint32Array(length);
+  crypto.getRandomValues(randomValues);
+  return Array.from(randomValues, (n) => charset[n % charset.length]).join("");
 }
 
 export default function StaffManager({
@@ -54,10 +60,17 @@ export default function StaffManager({
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
 
-  // Add modal
+  // Step 1: the main "Add Staff" form modal
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [form, setForm] = useState<StaffFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratedPassword, setIsGeneratedPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Step 2: the separate "confirm your own password" modal
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Delete modal
@@ -90,29 +103,60 @@ export default function StaffManager({
   function openAddModal() {
     setForm(emptyForm);
     setError(null);
+    setIsGeneratedPassword(false);
+    setConfirmPassword("");
     setAddModalOpen(true);
   }
 
-  async function handleAdd(e: React.FormEvent) {
+  // Step 1 submit: just validates the employee's own data, then moves to
+  // the separate confirmation window — nothing is sent to the server yet.
+  function handleAddFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!isGeneratedPassword && form.password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setConfirmAdminPassword("");
+    setConfirmError(null);
+    setAddModalOpen(false);
+    setConfirmOpen(true);
+  }
+
+  // Going back from the confirmation window to the form, keeping
+  // everything the admin already typed in.
+  function handleBackToForm() {
+    setConfirmOpen(false);
+    setAddModalOpen(true);
+  }
+
+  // Step 2 submit: this is the one that actually calls the API, now with
+  // the acting admin's own password attached.
+  async function handleConfirmSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setConfirmError(null);
     setSaving(true);
 
     const res = await fetch("/api/admin/staff", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        currentAdminPassword: confirmAdminPassword,
+      }),
     });
     const data = await res.json();
 
     setSaving(false);
 
     if (!res.ok) {
-      setError(data.error || "Something went wrong.");
+      setConfirmError(data.error || "Something went wrong.");
       return;
     }
 
-    setAddModalOpen(false);
+    setConfirmOpen(false);
     router.refresh();
     setStaff((prev) => [...prev, data.staff]);
   }
@@ -243,13 +287,13 @@ export default function StaffManager({
         </table>
       </div>
 
-      {/* Add Staff Modal */}
+      {/* Add Staff Modal — step 1: employee data */}
       {addModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8">
           <div className="w-full max-w-lg rounded-2xl border border-[#1E293B] bg-[#111827] p-6">
             <h2 className="text-lg font-semibold text-white">Add Staff</h2>
 
-            <form onSubmit={handleAdd} className="mt-4 space-y-4">
+            <form onSubmit={handleAddFormSubmit} className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-xs text-[#64748B]">First Name</label>
@@ -285,7 +329,7 @@ export default function StaffManager({
                   <label className="mb-1 block text-xs text-[#64748B]">Phone</label>
                   <input
                     required
-                    type="text"
+                    type="number"
                     value={form.phone}
                     onChange={(e) => updateField("phone", e.target.value)}
                     className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
@@ -293,13 +337,15 @@ export default function StaffManager({
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-[#64748B]">Gender</label>
-                  <input
+                  <select
                     required
-                    type="text"
                     value={form.gender}
                     onChange={(e) => updateField("gender", e.target.value)}
                     className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
-                  />
+                  >
+                    <option value="Mr">Mr</option>
+                    <option value="Mme">Mme</option>
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-[#64748B]">Date of Birth</label>
@@ -335,36 +381,57 @@ export default function StaffManager({
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>
+
                 <div className="col-span-2">
-                  <label className="mb-1 block text-xs text-[#64748B]">
-                    New Account Password
-                  </label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-xs text-[#64748B]">
+                      New Account Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const generated = generateStrongPassword();
+                        updateField("password", generated);
+                        setIsGeneratedPassword(true);
+                        setConfirmPassword("");
+                      }}
+                      className="text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA]"
+                    >
+                      Generate automatically
+                    </button>
+                  </div>
                   <input
                     required
-                    type="password"
+                    type="text"
                     value={form.password}
-                    onChange={(e) => updateField("password", e.target.value)}
-                    className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+                    onChange={(e) => {
+                      updateField("password", e.target.value);
+                      setIsGeneratedPassword(false);
+                    }}
+                    className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 font-mono text-white outline-none focus:border-[#3B82F6]"
                   />
+                  {form.password && (
+                    <p className="mt-1 text-xs text-amber-400">
+                      Save this password now and give it to the employee. It
+                      cannot be recovered later if forgotten.
+                    </p>
+                  )}
                 </div>
 
-                <div className="col-span-2 border-t border-[#1E293B] pt-4">
-                  <label className="mb-1 block text-xs text-[#64748B]">
-                    Confirm Your Password
-                  </label>
-                  <input
-                    required
-                    type="password"
-                    value={form.currentAdminPassword}
-                    onChange={(e) =>
-                      updateField("currentAdminPassword", e.target.value)
-                    }
-                    className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
-                  />
-                  <p className="mt-1 text-xs text-[#64748B]">
-                    Required to confirm this action is coming from you.
-                  </p>
-                </div>
+                {!isGeneratedPassword && (
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-xs text-[#64748B]">
+                      Re-enter Password
+                    </label>
+                    <input
+                      required
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+                    />
+                  </div>
+                )}
               </div>
 
               {error && <p className="text-sm text-red-400">{error}</p>}
@@ -379,10 +446,61 @@ export default function StaffManager({
                 </button>
                 <button
                   type="submit"
+                  className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB]"
+                >
+                  Continue
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm modal — step 2: a separate, small window asking for the
+          acting admin's own password before the account is actually created. */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#1E293B] bg-[#111827] p-6">
+            <h2 className="text-base font-semibold text-white">
+              Confirm your identity
+            </h2>
+            <p className="mt-2 text-sm text-[#94A3B8]">
+              Enter your own admin password to confirm creating this account.
+            </p>
+
+            <form onSubmit={handleConfirmSubmit} className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-[#64748B]">
+                  Your Password
+                </label>
+                <input
+                  required
+                  autoFocus
+                  type="password"
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
+                />
+              </div>
+
+              {confirmError && (
+                <p className="text-sm text-red-400">{confirmError}</p>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleBackToForm}
+                  className="rounded-lg border border-[#1E293B] px-4 py-2 text-sm font-medium text-[#94A3B8] hover:text-white"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
                   disabled={saving}
                   className="rounded-lg bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2563EB] disabled:opacity-60"
                 >
-                  {saving ? "Saving..." : "Add Staff"}
+                  {saving ? "Saving..." : "Confirm"}
                 </button>
               </div>
             </form>

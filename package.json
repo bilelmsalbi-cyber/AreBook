@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "@lottiefiles/dotlottie-react": "^0.19.10",
+    "@simplewebauthn/browser": "^9.0.1",
+    "@simplewebauthn/server": "^9.0.3",
+    "@upstash/redis": "^1.38.3",
     "argon2": "^0.45.1",
     "next": "16.2.10",
     "next-auth": "^5.0.0-beta.32",
@@ -20,6 +23,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",
+    "@simplewebauthn/types": "^9.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
