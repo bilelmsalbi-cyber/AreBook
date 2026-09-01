@@ -1,3 +1,5 @@
+import { escapeHtml } from "./escapeHtml";
+
 type VerifyEmailData = {
   firstName: string;
   verifyUrl: string;
@@ -10,7 +12,7 @@ export function buildVerifyEmail(data: VerifyEmailData) {
         <h1 style="color: white; margin: 0; font-size: 22px;">Confirm your email</h1>
       </div>
       <div style="padding: 24px;">
-        <p>Dear ${data.firstName},</p>
+        <p>Dear ${escapeHtml(data.firstName)},</p>
         <p>Thanks for creating an AreBook account. Please confirm this is your email address to activate your account.</p>
 
         <div style="text-align: center; margin: 28px 0;">

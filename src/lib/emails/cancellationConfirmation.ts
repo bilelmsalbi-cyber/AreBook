@@ -1,3 +1,5 @@
+import { escapeHtml } from "./escapeHtml";
+
 type FlightLegData = {
   departingPlace: string;
   destination: string;
@@ -78,7 +80,7 @@ export function buildCancellationEmail(data: CancellationEmailData) {
         <h1 style="color: white; margin: 0; font-size: 22px;">Booking Cancelled</h1>
       </div>
       <div style="padding: 24px;">
-        <p>Dear ${data.firstName},</p>
+        <p>Dear ${escapeHtml(data.firstName)},</p>
         <p>${introText}</p>
 
         <div style="background: #F3F9FF; border: 1px solid #DCEEFF; border-radius: 12px; padding: 16px; text-align: center; margin: 20px 0;">
