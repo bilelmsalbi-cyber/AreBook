@@ -28,7 +28,22 @@ useEffect(() => {
     } else if (verify === "invalid") {
       setError("That confirmation link is invalid.");
     }
+
+    const match = document.cookie.match(/(?:^|; )oauth_error=([^;]*)/);
+    const oauthError = match ? decodeURIComponent(match[1]) : null;
+    if (oauthError === "no_account") {
+      setError("No account is linked to this Google email yet. Please create an account first.");
+      document.cookie = "oauth_error=; path=/; max-age=0";
+    } else if (oauthError === "account_exists") {
+      setError("This email is already linked to an existing account. Please log in below.");
+      document.cookie = "oauth_error=; path=/; max-age=0";
+    }
   }, [searchParams]);
+
+  function handleGoogleSignIn() {
+    document.cookie = "oauth_intent=login; path=/; max-age=120";
+    signIn("google", { callbackUrl: "/" });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,7 +105,7 @@ useEffect(() => {
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
             <button
               type="button"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={handleGoogleSignIn}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#CFE3FA] bg-white py-3 font-semibold text-[#16324F] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <svg width="18" height="18" viewBox="0 0 18 18">

@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 
@@ -82,12 +83,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       const googleId = account.providerAccountId;
 
+      const cookieStore = await cookies();
+      const intent = cookieStore.get("oauth_intent")?.value;
+      cookieStore.delete("oauth_intent");
+
       const existingCustomer = await prisma.customer.findFirst({
         where: {
           OR: [{ googleId }, { person: { email } }],
         },
         include: { person: true },
       });
+
+      if (intent === "login" && !existingCustomer) {
+        cookieStore.set("oauth_error", "no_account", { maxAge: 30, path: "/" });
+        return false;
+      }
+
+      if (intent === "signup" && existingCustomer) {
+        cookieStore.set("oauth_error", "account_exists", { maxAge: 30, path: "/" });
+        return false;
+      }
 
       let customerId: number;
 
@@ -128,8 +143,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
           customerId = created.id;
         } catch {
-          // حالة نادرة: محاولتان متزامنتان أنشأتا نفس الحساب بنفس اللحظة.
-          // بدل الفشل، نبحث مرة ثانية عن الحساب اللي انخلق فعلاً ونستخدمه.
           const fallback = await prisma.customer.findFirst({
             where: {
               OR: [{ googleId }, { person: { email } }],

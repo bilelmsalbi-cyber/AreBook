@@ -18,6 +18,11 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  function handleGoogleSignUp() {
+    document.cookie = "oauth_intent=signup; path=/; max-age=120";
+    signIn("google", { callbackUrl: "/" });
+  }
+
   function updateField(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -83,7 +88,7 @@ export default function SignupPage() {
           <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
             <button
               type="button"
-              onClick={() => signIn("google", { callbackUrl: "/" })}
+              onClick={handleGoogleSignUp}
               className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#CFE3FA] bg-white py-3 font-semibold text-[#16324F] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <svg width="18" height="18" viewBox="0 0 18 18">
