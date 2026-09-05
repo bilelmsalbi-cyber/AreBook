@@ -12,7 +12,7 @@ export default function PlaneLoader({ label = "Loading" }: { label?: string }) {
           autoplay
         />
       </div>
-      <p className="text-sm font-medium tracking-wide text-blue-700">{label}</p>
+      <p className="text-sm font-medium text-[#16324F]">{label}</p>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export default function Toggle({
         type="button"
         onClick={() => onChange(!checked)}
         className={`relative h-7 w-12 rounded-full transition-colors duration-200 ${
-          checked ? "bg-[#3B82F6]" : "bg-gray-300"
+          checked ? "bg-[#C89A5B]" : "bg-gray-300"
         }`}
       >
         <span

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import PlaneLoader from "@/components/PlaneLoader";
 
 type SpecialRequest = {
   id: number;
@@ -182,7 +183,7 @@ function InvoiceContent() {
 
   if (notFound) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF]">
+      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0]">
         <p className="text-[#5C7A96]">Booking not found.</p>
       </main>
     );
@@ -191,7 +192,11 @@ function InvoiceContent() {
   // Not ready to render until the booking is loaded, and — for round
   // trips — until the discounted price has come back too.
   if (!booking || (isRoundTrip && seatsDiscounted === null)) {
-    return null; // loading.tsx handles this
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0]">
+        <PlaneLoader />
+      </main>
+    );
   }
 
   // Shown as ONE combined seat price (outbound + return together), not two
@@ -239,15 +244,15 @@ function InvoiceContent() {
   }
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-4xl">
-          <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+          <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">
             BOOKING #{booking.id}
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Booking Invoice</h1>
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">Booking Invoice</h1>
 
-          <p className="mt-1 text-sm text-[#DCEEFF]">
+          <p className="mt-1 text-sm text-[#EADFC7]">
             {returnLeg ? "Outbound: " : ""}
             {booking.trip.departingPlace} to {booking.trip.destination} —{" "}
             {new Date(booking.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
@@ -255,7 +260,7 @@ function InvoiceContent() {
           </p>
 
           {returnLeg && (
-            <p className="mt-1 text-sm text-[#DCEEFF]">
+            <p className="mt-1 text-sm text-[#EADFC7]">
               Return: {returnLeg.trip.departingPlace} to {returnLeg.trip.destination} —{" "}
               {new Date(returnLeg.trip.departureDateTime).toLocaleString("en-GB")} —{" "}
               {returnLeg.trip.plane.aircraftType}
@@ -273,7 +278,7 @@ function InvoiceContent() {
             return (
               <div
                 key={passenger.id}
-                className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]"
+                className="rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-lg font-semibold text-[#16324F]">
@@ -289,7 +294,7 @@ function InvoiceContent() {
                   </p>
                 )}
 
-                <div className="mt-4 space-y-2 border-t border-[#DCEEFF] pt-4">
+                <div className="mt-4 space-y-2 border-t border-[#EADFC7] pt-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#5C7A96]">
                       {booking.seatClass === "BUSINESS" ? "Business" : "Guest"} class seat
@@ -313,7 +318,7 @@ function InvoiceContent() {
                   ))}
                 </div>
 
-                <div className="mt-3 flex justify-between border-t border-[#DCEEFF] pt-3 text-sm font-semibold">
+                <div className="mt-3 flex justify-between border-t border-[#EADFC7] pt-3 text-sm font-semibold">
                   <span className="text-[#16324F]">Passenger total</span>
                   <span className="text-[#16324F]">{passengerTotal.toFixed(2)} TND</span>
                 </div>
@@ -321,13 +326,13 @@ function InvoiceContent() {
             );
           })}
 
-          <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
+          <div className="rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]">
             <div className="flex justify-between text-sm text-[#5C7A96]">
               <span>Seats ({booking.passengers.length}){returnLeg ? " — round trip" : ""}</span>
               <div className="text-right">
                 {isRoundTrip && seatsSavings > 0 ? (
                   <>
-                    <span className="text-[#9DB6CF] line-through">{seatsOriginal.toFixed(2)} TND</span>
+                    <span className="text-[#B3A488] line-through">{seatsOriginal.toFixed(2)} TND</span>
                     <span className="ml-2 font-medium text-[#16324F]">
                       {seatsFinal.toFixed(2)} TND
                     </span>
@@ -346,7 +351,7 @@ function InvoiceContent() {
               <span>Services{returnLeg ? " — both flights" : ""}</span>
               <span>{servicesSubtotal.toFixed(2)} TND</span>
             </div>
-            <div className="mt-3 flex items-start justify-between border-t border-[#DCEEFF] pt-3 text-xl font-bold text-[#16324F]">
+            <div className="mt-3 flex items-start justify-between border-t border-[#EADFC7] pt-3 text-xl font-bold text-[#16324F]">
               <span>Total</span>
               <div className="text-right">
                 <span>{total.toFixed(2)} TND</span>
@@ -362,7 +367,7 @@ function InvoiceContent() {
           <button
             type="button"
             onClick={handlePayment}
-            className="w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl"
+            className="w-full rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl"
           >
            Proceed to Payment
           </button>

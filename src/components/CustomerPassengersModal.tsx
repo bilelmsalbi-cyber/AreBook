@@ -74,7 +74,7 @@ export default function CustomerPassengersModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-2xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)]">
+      <div className="w-full max-w-2xl rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(11,30,61,0.25)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[#16324F]">
             Passengers — Booking #{bookingId}
@@ -104,7 +104,7 @@ export default function CustomerPassengersModal({
             passengers.map((p) => (
               <div
                 key={p.id}
-                className="rounded-lg border border-[#DCEEFF] bg-[#F8FBFF] p-4"
+                className="rounded-lg border border-[#EADFC7] bg-[#FAF6EC] p-4"
               >
                 <p className="text-sm font-semibold text-[#16324F]">
                   {p.person.firstName} {p.person.lastName}
@@ -116,7 +116,7 @@ export default function CustomerPassengersModal({
                   <p>Date of Birth: {formatDate(p.person.dateBirth)}</p>
                 </div>
 
-                <div className="mt-3 border-t border-[#DCEEFF] pt-3">
+                <div className="mt-3 border-t border-[#EADFC7] pt-3">
                   <p className="text-xs font-medium text-[#5C7A96]">
                     Travel Document
                   </p>
@@ -135,7 +135,7 @@ export default function CustomerPassengersModal({
                 </div>
 
                 {p.specialRequests.length > 0 && (
-                  <div className="mt-3 border-t border-[#DCEEFF] pt-3">
+                  <div className="mt-3 border-t border-[#EADFC7] pt-3">
                     <p className="text-xs font-medium text-[#5C7A96]">
                       Special Requests
                     </p>

@@ -189,7 +189,7 @@ export default function MyBookingsPanel() {
             </p>
             <form onSubmit={handleGuestSearch} className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                   Booking Reference (PNR)
                 </label>
                 <input
@@ -198,11 +198,11 @@ export default function MyBookingsPanel() {
                   onChange={(e) => setPnrInput(e.target.value)}
                   disabled={searching}
                   placeholder="ABC123"
-                  className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md disabled:opacity-60"
+                  className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] placeholder-[#B3A488] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md disabled:opacity-60"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                   Last Name
                 </label>
                 <input
@@ -211,7 +211,7 @@ export default function MyBookingsPanel() {
                   onChange={(e) => setNameInput(e.target.value)}
                   disabled={searching}
                   placeholder="Doe"
-                  className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md disabled:opacity-60"
+                  className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] placeholder-[#B3A488] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md disabled:opacity-60"
                 />
               </div>
 
@@ -220,7 +220,7 @@ export default function MyBookingsPanel() {
               <button
                 type="submit"
                 disabled={searching}
-                className="w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:from-[#1D4ED8] hover:to-[#2563EB] hover:shadow-xl disabled:opacity-60 disabled:hover:translate-y-0"
+                className="w-full rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:from-[#A97535] hover:to-[#B8863F] hover:shadow-xl disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 {searching ? "Searching..." : "Find My Booking"}
               </button>
@@ -228,8 +228,8 @@ export default function MyBookingsPanel() {
           </>
         ) : (
           <div>
-            <div className="rounded-xl border border-[#DCEEFF] bg-[#F8FBFF] p-5">
-              <p className="text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+            <div className="rounded-xl border border-[#EADFC7] bg-[#FAF6EC] p-5">
+              <p className="text-sm font-medium text-[#5C7A96]">
                 {foundBooking.tripType === "ROUND_TRIP" ? "Round Trip" : "One Way"} · PNR{" "}
                 {foundBooking.pnr ?? "—"}
               </p>
@@ -264,7 +264,7 @@ export default function MyBookingsPanel() {
                 <button
                   type="button"
                   onClick={() => setShowGuestPassengers(true)}
-                  className="rounded-lg border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+                  className="rounded-lg border border-[#B8863F] px-4 py-2 text-sm font-semibold text-[#B8863F] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FBF7EE]"
                 >
                   Show Passengers Info
                 </button>
@@ -281,7 +281,7 @@ export default function MyBookingsPanel() {
             <button
               type="button"
               onClick={resetGuestSearch}
-              className="mt-4 w-full rounded-xl border border-[#CFE3FA] py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#F8FBFF]"
+              className="mt-4 w-full rounded-xl border border-[#E8DFCC] py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#FAF6EC]"
             >
               Search for a different booking
             </button>
@@ -330,11 +330,11 @@ export default function MyBookingsPanel() {
           bookings?.map((b) => (
             <div
               key={b.id}
-              className="rounded-xl border border-[#DCEEFF] bg-[#F8FBFF] p-5"
+              className="rounded-xl border border-[#EADFC7] bg-[#FAF6EC] p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <p className="text-sm font-medium text-[#5C7A96]">
                     {b.tripType === "ROUND_TRIP" ? "Round Trip" : "One Way"} · PNR{" "}
                     {b.pnr ?? "—"}
                   </p>
@@ -370,7 +370,7 @@ export default function MyBookingsPanel() {
                 <button
                   type="button"
                   onClick={() => setSelectedBookingId(b.id)}
-                  className="rounded-lg border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+                  className="rounded-lg border border-[#B8863F] px-4 py-2 text-sm font-semibold text-[#B8863F] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FBF7EE]"
                 >
                   Show Passengers Info
                 </button>

@@ -28,6 +28,8 @@ const emptyForm: StaffFormState = {
   password: "",
 };
 
+const PASSWORD_LENGTH = 10;
+
 function formatDate(iso: string) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -39,12 +41,92 @@ function creatorLabel(staff: StaffMember) {
   return `${staff.createdBy.firstName} ${staff.createdBy.lastName}`;
 }
 
-function generateStrongPassword(length = 14) {
-  const charset =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
-  const randomValues = new Uint32Array(length);
+// Only letters + digits allowed, capped at PASSWORD_LENGTH — used on every
+// keystroke so it's physically impossible to type an 11th character or a
+// symbol into the password fields.
+function sanitizePasswordInput(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, "").slice(0, PASSWORD_LENGTH);
+}
+
+function isValidPassword(value: string) {
+  return (
+    value.length === PASSWORD_LENGTH &&
+    /[A-Za-z]/.test(value) &&
+    /[0-9]/.test(value)
+  );
+}
+
+function generatePassword() {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const all = letters + digits;
+
+  const randomValues = new Uint32Array(PASSWORD_LENGTH);
   crypto.getRandomValues(randomValues);
-  return Array.from(randomValues, (n) => charset[n % charset.length]).join("");
+  const chars = Array.from(randomValues, (n) => all[n % all.length]);
+
+  if (!chars.some((c) => digits.includes(c))) {
+    chars[0] = digits[randomValues[0] % digits.length];
+  }
+  if (!chars.some((c) => letters.includes(c))) {
+    chars[1] = letters[randomValues[1] % letters.length];
+  }
+
+  return chars.join("");
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggleVisible,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  visible: boolean;
+  onToggleVisible: () => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs text-[#64748B]">{label}</label>
+      <div className="relative">
+        <input
+          required
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(sanitizePasswordInput(e.target.value))}
+          className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 pr-10 font-mono text-white outline-none focus:border-[#3B82F6]"
+        />
+        <button
+          type="button"
+          onClick={onToggleVisible}
+          tabIndex={-1}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-white"
+        >
+          <EyeIcon open={visible} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function StaffManager({
@@ -60,20 +142,18 @@ export default function StaffManager({
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
 
-  // Step 1: the main "Add Staff" form modal
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [form, setForm] = useState<StaffFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
-  const [isGeneratedPassword, setIsGeneratedPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
 
-  // Step 2: the separate "confirm your own password" modal
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -103,18 +183,32 @@ export default function StaffManager({
   function openAddModal() {
     setForm(emptyForm);
     setError(null);
-    setIsGeneratedPassword(false);
     setConfirmPassword("");
+    setPasswordVisible(false);
+    setConfirmPasswordVisible(false);
     setAddModalOpen(true);
   }
 
-  // Step 1 submit: just validates the employee's own data, then moves to
-  // the separate confirmation window — nothing is sent to the server yet.
+  function handleGeneratePassword() {
+    const generated = generatePassword();
+    updateField("password", generated);
+    setConfirmPassword(generated);
+    setPasswordVisible(true);
+    setConfirmPasswordVisible(true);
+  }
+
   function handleAddFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!isGeneratedPassword && form.password !== confirmPassword) {
+    if (!isValidPassword(form.password)) {
+      setError(
+        `Password must be exactly ${PASSWORD_LENGTH} characters, with at least one letter and one number.`
+      );
+      return;
+    }
+
+    if (form.password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -125,15 +219,11 @@ export default function StaffManager({
     setConfirmOpen(true);
   }
 
-  // Going back from the confirmation window to the form, keeping
-  // everything the admin already typed in.
   function handleBackToForm() {
     setConfirmOpen(false);
     setAddModalOpen(true);
   }
 
-  // Step 2 submit: this is the one that actually calls the API, now with
-  // the acting admin's own password attached.
   async function handleConfirmSubmit(e: React.FormEvent) {
     e.preventDefault();
     setConfirmError(null);
@@ -194,7 +284,6 @@ export default function StaffManager({
 
   return (
     <div>
-      {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Staff Accounts</h1>
@@ -211,7 +300,6 @@ export default function StaffManager({
         </button>
       </div>
 
-      {/* Search */}
       <form onSubmit={handleSearch} className="mt-4 flex gap-3">
         <input
           type="text"
@@ -229,7 +317,6 @@ export default function StaffManager({
         </button>
       </form>
 
-      {/* Table */}
       <div className="mt-6 overflow-hidden rounded-xl border border-[#1E293B]">
         <table className="w-full text-left text-sm">
           <thead className="bg-[#111827] text-[#64748B]">
@@ -269,8 +356,6 @@ export default function StaffManager({
                   {creatorLabel(member)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {/* Self-delete is blocked entirely at the UI level too —
-                      not just relying on the API check. */}
                   {member.id !== currentAdminId && (
                     <button
                       type="button"
@@ -287,7 +372,6 @@ export default function StaffManager({
         </table>
       </div>
 
-      {/* Add Staff Modal — step 1: employee data */}
       {addModalOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-8">
           <div className="w-full max-w-lg rounded-2xl border border-[#1E293B] bg-[#111827] p-6">
@@ -329,7 +413,7 @@ export default function StaffManager({
                   <label className="mb-1 block text-xs text-[#64748B]">Phone</label>
                   <input
                     required
-                    type="number"
+                    type="text"
                     value={form.phone}
                     onChange={(e) => updateField("phone", e.target.value)}
                     className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
@@ -384,53 +468,40 @@ export default function StaffManager({
 
                 <div className="col-span-2">
                   <div className="mb-1 flex items-center justify-between">
-                    <label className="block text-xs text-[#64748B]">
-                      New Account Password
-                    </label>
+                    <span className="text-xs text-[#64748B]">
+                      Password: exactly {PASSWORD_LENGTH} characters, at least
+                      one letter and one number.
+                    </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        const generated = generateStrongPassword();
-                        updateField("password", generated);
-                        setIsGeneratedPassword(true);
-                        setConfirmPassword("");
-                      }}
-                      className="text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA]"
+                      onClick={handleGeneratePassword}
+                      className="whitespace-nowrap text-xs font-medium text-[#3B82F6] hover:text-[#60A5FA]"
                     >
                       Generate automatically
                     </button>
                   </div>
-                  <input
-                    required
-                    type="text"
-                    value={form.password}
-                    onChange={(e) => {
-                      updateField("password", e.target.value);
-                      setIsGeneratedPassword(false);
-                    }}
-                    className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 font-mono text-white outline-none focus:border-[#3B82F6]"
-                  />
-                  {form.password && (
-                    <p className="mt-1 text-xs text-amber-400">
-                      Save this password now and give it to the employee. It
-                      cannot be recovered later if forgotten.
-                    </p>
-                  )}
                 </div>
 
-                {!isGeneratedPassword && (
-                  <div className="col-span-2">
-                    <label className="mb-1 block text-xs text-[#64748B]">
-                      Re-enter Password
-                    </label>
-                    <input
-                      required
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full rounded-lg border border-[#1E293B] bg-[#0B0F19] px-3 py-2 text-white outline-none focus:border-[#3B82F6]"
-                    />
-                  </div>
+                <PasswordField
+                  label="New Account Password"
+                  value={form.password}
+                  onChange={(v) => updateField("password", v)}
+                  visible={passwordVisible}
+                  onToggleVisible={() => setPasswordVisible((v) => !v)}
+                />
+                <PasswordField
+                  label="Re-enter Password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  visible={confirmPasswordVisible}
+                  onToggleVisible={() => setConfirmPasswordVisible((v) => !v)}
+                />
+
+                {form.password && (
+                  <p className="col-span-2 -mt-2 text-xs text-amber-400">
+                    Save this password now and give it to the employee. It
+                    cannot be recovered later if forgotten.
+                  </p>
                 )}
               </div>
 
@@ -456,8 +527,6 @@ export default function StaffManager({
         </div>
       )}
 
-      {/* Confirm modal — step 2: a separate, small window asking for the
-          acting admin's own password before the account is actually created. */}
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm rounded-2xl border border-[#1E293B] bg-[#111827] p-6">
@@ -508,7 +577,6 @@ export default function StaffManager({
         </div>
       )}
 
-      {/* Delete confirmation modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm rounded-2xl border border-[#1E293B] bg-[#111827] p-6">

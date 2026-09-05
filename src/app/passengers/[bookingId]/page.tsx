@@ -105,34 +105,34 @@ function PassengersContent() {
   }
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-5xl">
-          <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+          <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">
             BOOKING #{bookingId}
           </p>
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">
             Passenger Information — {seatsNeeded} passenger(s)
           </h1>
 
           {isRoundTrip && booking && (
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Outbound</p>
+                <p className="text-sm text-[#E9C98C]">Outbound</p>
                 <p className="mt-1 text-sm text-white">
                   {booking.trip.departingPlace} &rarr; {booking.trip.destination}
                 </p>
-                <p className="text-xs text-[#DCEEFF]">
+                <p className="text-xs text-[#EADFC7]">
                   {new Date(booking.trip.departureDateTime).toLocaleString("en-GB")}
                 </p>
               </div>
               <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
-                <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Return</p>
+                <p className="text-sm text-[#E9C98C]">Return</p>
                 <p className="mt-1 text-sm text-white">
                   {booking.linkedBooking!.trip.departingPlace} &rarr;{" "}
                   {booking.linkedBooking!.trip.destination}
                 </p>
-                <p className="text-xs text-[#DCEEFF]">
+                <p className="text-xs text-[#EADFC7]">
                   {new Date(booking.linkedBooking!.trip.departureDateTime).toLocaleString("en-GB")}
                 </p>
               </div>
@@ -140,7 +140,7 @@ function PassengersContent() {
           )}
 
           {isRoundTrip && (
-            <p className="mt-3 text-xs text-[#DCEEFF]">
+            <p className="mt-3 text-xs text-[#EADFC7]">
               Passenger details below apply to both the outbound and return flights.
             </p>
           )}
@@ -152,7 +152,7 @@ function PassengersContent() {
           {passengers.map((passenger, index) => (
             <div
               key={index}
-              className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-3xl hover:shadow-[0_20px_40px_-15px_rgba(37,99,235,0.3)]"
+              className="rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-3xl hover:shadow-[0_20px_40px_-15px_rgba(11,30,61,0.3)]"
             >
               <h2 className="mb-4 text-lg font-semibold text-[#16324F]">
                 Passenger {index + 1}
@@ -160,76 +160,76 @@ function PassengersContent() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     First Name
                   </label>
                   <input
                     type="text"
                     value={passenger.firstName}
                     onChange={(e) => updatePassenger(index, "firstName", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Last Name
                   </label>
                   <input
                     type="text"
                     value={passenger.lastName}
                     onChange={(e) => updatePassenger(index, "lastName", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Email
                   </label>
                   <input
                     type="email"
                     value={passenger.email}
                     onChange={(e) => updatePassenger(index, "email", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Phone
                   </label>
                   <input
-                    type="tel"
+                    type="number"
                     value={passenger.phone}
                     onChange={(e) => updatePassenger(index, "phone", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Gender
                   </label>
                   <select
                     value={passenger.gender}
                     onChange={(e) => updatePassenger(index, "gender", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   >
                     <option value="Mr">Mr</option>
                     <option value="Mme">Mme</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Date of Birth
                   </label>
                   <input
                     type="date"
                     value={passenger.dateBirth}
                     onChange={(e) => updatePassenger(index, "dateBirth", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
               </div>
 
-              <div className="mt-6 border-t border-[#DCEEFF] pt-4">
+              <div className="mt-6 border-t border-[#EADFC7] pt-4">
                 <Toggle
                   checked={passenger.hasDocument}
                   onChange={(value) => updatePassenger(index, "hasDocument", value)}
@@ -239,19 +239,19 @@ function PassengersContent() {
                 {passenger.hasDocument && (
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                      <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                         Document Type
                       </label>
                       <select
                         value={passenger.documentType}
                         onChange={(e) => updatePassenger(index, "documentType", e.target.value)}
-                        className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                        className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                       >
                         <option value="Passport">Passport</option>
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                      <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                         Passport Number
                       </label>
                       <input
@@ -259,29 +259,29 @@ function PassengersContent() {
                         maxLength={9}
                         value={passenger.documentNumber}
                         onChange={(e) => updatePassenger(index, "documentNumber", e.target.value)}
-                        className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                        className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                      <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                         Issuing Country
                       </label>
                       <input
                         type="text"
                         value={passenger.documentCountry}
                         onChange={(e) => updatePassenger(index, "documentCountry", e.target.value)}
-                        className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                        className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                      <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                         Expiry Date
                       </label>
                       <input
                         type="date"
                         value={passenger.documentExpiry}
                         onChange={(e) => updatePassenger(index, "documentExpiry", e.target.value)}
-                        className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                        className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                       />
                     </div>
                   </div>
@@ -299,7 +299,7 @@ function PassengersContent() {
               <button
                 type="button"
                 onClick={() => goToServices(index)}
-                className="mt-4 w-full rounded-xl border border-[#2563EB] bg-white py-2.5 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:bg-[#EAF4FF] hover:shadow-lg"
+                className="mt-4 w-full rounded-xl border border-[#B8863F] bg-white py-2.5 text-sm font-semibold text-[#B8863F] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:bg-[#FBF7EE] hover:shadow-lg"
               >
                 Add Services for Passenger {index + 1}
               </button>
@@ -309,7 +309,7 @@ function PassengersContent() {
           <button
             type="button"
             onClick={handleViewInvoice}
-            className="w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl"
+            className="w-full rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl"
           >
            View Invoice
           </button>

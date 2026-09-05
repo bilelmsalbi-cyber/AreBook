@@ -128,7 +128,7 @@ export default function CancelBookingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)]">
+      <div className="w-full max-w-md rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(11,30,61,0.25)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[#16324F]">
             Cancel Booking #{bookingId}
@@ -157,7 +157,7 @@ export default function CancelBookingModal({
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 w-full rounded-lg border border-[#CFE3FA] px-4 py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#F8FBFF]"
+              className="mt-6 w-full rounded-lg border border-[#E8DFCC] px-4 py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#FAF6EC]"
             >
               Close
             </button>
@@ -169,13 +169,13 @@ export default function CancelBookingModal({
           breakdown && (
             <>
               {isRoundTrip && (
-                <p className="mt-4 rounded-lg bg-[#F8FBFF] p-3 text-xs text-[#5C7A96]">
+                <p className="mt-4 rounded-lg bg-[#FAF6EC] p-3 text-xs text-[#5C7A96]">
                   This is a round-trip booking — cancelling it cancels both the outbound
                   and return flights together.
                 </p>
               )}
 
-              <div className="mt-4 space-y-2 rounded-lg border border-[#DCEEFF] bg-[#F8FBFF] p-4 text-sm">
+              <div className="mt-4 space-y-2 rounded-lg border border-[#EADFC7] bg-[#FAF6EC] p-4 text-sm">
                 <div className="flex justify-between text-[#16324F]">
                   <span>Amount paid</span>
                   <span>{money(breakdown.originalAmount)} TND</span>
@@ -186,7 +186,7 @@ export default function CancelBookingModal({
                   </span>
                   <span>-{money(breakdown.cancellationDeductionAmount)} TND</span>
                 </div>
-                <div className="flex justify-between border-t border-[#DCEEFF] pt-2 text-[#16324F]">
+                <div className="flex justify-between border-t border-[#EADFC7] pt-2 text-[#16324F]">
                   <span>Amount after cancellation fee</span>
                   <span>{money(breakdown.amountAfterCancellationDeduction)} TND</span>
                 </div>
@@ -194,7 +194,7 @@ export default function CancelBookingModal({
                   <span>Stripe processing fee</span>
                   <span>-{money(breakdown.stripeFeeOnRefund)} TND</span>
                 </div>
-                <div className="flex justify-between border-t border-[#DCEEFF] pt-2 text-base font-semibold text-[#16324F]">
+                <div className="flex justify-between border-t border-[#EADFC7] pt-2 text-base font-semibold text-[#16324F]">
                   <span>You will receive</span>
                   <span>{money(breakdown.finalRefundAmount)} TND</span>
                 </div>
@@ -207,7 +207,7 @@ export default function CancelBookingModal({
               </p>
 
               <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                   Type PNR <span className="font-mono">{breakdown.pnr}</span> to confirm
                 </label>
                 <input
@@ -216,7 +216,7 @@ export default function CancelBookingModal({
                   onChange={(e) => setPnrConfirmInput(e.target.value)}
                   disabled={stage === "confirming"}
                   placeholder={breakdown.pnr ?? ""}
-                  className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-2.5 text-sm text-[#16324F] outline-none transition-all duration-200 focus:border-[#2563EB] focus:bg-white disabled:opacity-60"
+                  className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-2.5 text-sm text-[#16324F] outline-none transition-all duration-200 focus:border-[#B8863F] focus:bg-white disabled:opacity-60"
                 />
               </div>
 
@@ -229,7 +229,7 @@ export default function CancelBookingModal({
                   type="button"
                   onClick={onClose}
                   disabled={stage === "confirming"}
-                  className="flex-1 rounded-lg border border-[#CFE3FA] px-4 py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#F8FBFF] disabled:opacity-50"
+                  className="flex-1 rounded-lg border border-[#E8DFCC] px-4 py-2.5 text-sm font-semibold text-[#16324F] transition-all duration-200 hover:bg-[#FAF6EC] disabled:opacity-50"
                 >
                   Keep Booking
                 </button>
@@ -256,7 +256,7 @@ export default function CancelBookingModal({
             <button
               type="button"
               onClick={onClose}
-              className="mt-6 w-full rounded-lg bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#1D4ED8] hover:to-[#2563EB]"
+              className="mt-6 w-full rounded-lg bg-linear-to-r from-[#B8863F] to-[#C89A5B] px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:from-[#A97535] hover:to-[#B8863F]"
             >
               Done
             </button>

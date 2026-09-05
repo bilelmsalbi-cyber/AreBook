@@ -182,28 +182,28 @@ function ResultsContent() {
   }
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-5xl">
           <Link
             href="/"
-            className="text-sm text-[#DCEEFF] transition-colors hover:text-white"
+            className="text-sm text-[#EADFC7] transition-colors hover:text-white"
           >
             &larr; New Search
           </Link>
 
           {isRoundTrip && !checkingReturn && !noReturnFlights && (
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.15em] text-[#DCEEFF]">
+            <p className="mt-3 text-sm font-semibold text-[#EADFC7]">
               {isReturnLeg ? "Return flight · Step 2 of 2" : "Outbound flight · Step 1 of 2"}
             </p>
           )}
 
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">
             {departingPlace} to {destination}
           </h1>
 
           {isReturnLeg && outboundDeparture && (
-            <p className="mt-1 text-sm text-[#DCEEFF]">
+            <p className="mt-1 text-sm text-[#EADFC7]">
               Outbound selected: {destination} &rarr; {departingPlace} ·{" "}
               {new Date(outboundDeparture).toLocaleString("en-GB")}
             </p>
@@ -216,7 +216,7 @@ function ResultsContent() {
           {checkingReturn ? (
             <PlaneLoader />
           ) : noReturnFlights ? (
-            <div className="rounded-2xl border border-[#DCEEFF] bg-white p-10 text-center shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)]">
+            <div className="rounded-2xl border border-[#EADFC7] bg-white p-10 text-center shadow-[0_20px_40px_-15px_rgba(11,30,61,0.2)]">
               <p className="text-lg font-semibold text-[#16324F]">
                 No return flights available
               </p>
@@ -229,7 +229,7 @@ function ResultsContent() {
               </p>
               <Link
                 href="/"
-                className="mt-6 inline-block rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl"
+                className="mt-6 inline-block rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl"
               >
                 Back to Search
               </Link>
@@ -237,7 +237,7 @@ function ResultsContent() {
           ) : isLoading ? (
             <PlaneLoader />
           ) : results.length === 0 ? (
-            <div className="rounded-2xl border border-[#DCEEFF] bg-white p-10 text-center shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)]">
+            <div className="rounded-2xl border border-[#EADFC7] bg-white p-10 text-center shadow-[0_20px_40px_-15px_rgba(11,30,61,0.2)]">
               <p className="text-[#5C7A96]">No matching flights found.</p>
             </div>
           ) : (
@@ -246,9 +246,9 @@ function ResultsContent() {
                 <Link
                   key={trip.id}
                   href={getTripHref(trip)}
-                  className="flex flex-col justify-between gap-4 rounded-xl border border-[#DCEEFF] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:border-[#2563EB] hover:shadow-[0_20px_40px_-10px_rgba(37,99,235,0.35)] md:flex-row md:items-center">
+                  className="flex flex-col justify-between gap-4 rounded-xl border border-[#EADFC7] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:border-[#B8863F] hover:shadow-[0_20px_40px_-10px_rgba(11,30,61,0.35)] md:flex-row md:items-center">
                   <div>
-                    <p className="font-mono text-xs text-[#2563EB]">
+                    <p className="font-mono text-xs text-[#B8863F]">
                       {trip.plane.aircraftType}
                     </p>
                     <p className="mt-1 text-lg font-semibold text-[#16324F]">
@@ -283,7 +283,7 @@ function ResultsContent() {
                 <button
                   onClick={handleLoadMore}
                   disabled={isLoadingMore}
-                  className="rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isLoadingMore
                     ? "Loading..."
@@ -295,7 +295,7 @@ function ResultsContent() {
               {departureDate && !showAllClicked && (
                 <button
                   onClick={handleShowAllFlights}
-                  className="rounded-xl border border-[#2563EB] bg-white px-5 py-2 text-sm font-medium text-[#2563EB] transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:bg-linear-to-r hover:from-[#2563EB] hover:to-[#3B82F6] hover:text-white hover:shadow-xl"
+                  className="rounded-xl border border-[#B8863F] bg-white px-5 py-2 text-sm font-medium text-[#B8863F] transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:bg-linear-to-r hover:from-[#B8863F] hover:to-[#C89A5B] hover:text-white hover:shadow-xl"
                 >
                   Show all flights to this destination
                 </button>

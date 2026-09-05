@@ -53,12 +53,12 @@ export default function Home() {
     router.push(`/results?${params.toString()}`);
   }
 
-  const totalPassengers = infants + children + adults;
 
   return (
     <main className="relative min-h-screen text-[#16324F]">
       {/* ==================== Full-bleed background photo ====================
-          Covers the hero strip AND the area behind the white search card. */}
+          Unchanged: same photo, same crop, same overlays — only the palette
+          bridging it into the card below has shifted from cool blue to warm ivory. */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute left-1/2 top-1/2 h-[98%] w-[101%] -translate-x-1/2 -translate-y-1/2">
           <Image
@@ -68,40 +68,41 @@ export default function Home() {
             priority
             sizes="100vw"
             className="object-cover"
-            style={{ objectPosition: "100% 93%" }}
+            style={{ objectPosition: "0% 90%" }}
           />
         </div>
       </div>
       <div className="fixed inset-0 -z-10 bg-linear-to-r from-[#0B1E3D]/80 via-[#0B1E3D]/35 to-transparent" />
-      <div className="fixed inset-0 -z-10 bg-linear-to-b from-transparent via-transparent to-[#EAF3FF]/95" />
+      <div className="fixed inset-0 -z-10 bg-linear-to-b from-transparent via-transparent to-[#FBF7EE]/95" />
 
       {/* ==================== Hero ==================== */}
       <section className="relative px-6 pb-28 pt-24 md:px-12 md:pt-32">
         <div className="max-w-xl">
-          <div className="mb-5 inline-flex items-center gap-3 rounded-full border border-white/30 bg-white/10 px-4 py-1.5 font-mono text-xs tracking-[0.2em] text-white backdrop-blur-sm">
-            <span>ANYWHERE</span>
-            <span className="text-white/50">✈</span>
-            <span>EVERYWHERE</span>
-            <span className="mx-1 h-3 w-px bg-white/30" />
-            <span className="text-white/70">AREBOOK</span>
+          <div className="mb-6 inline-flex items-center gap-2.5 border-b border-[#C89A5B]/60 pb-2">
+            <span className="text-lg font-medium text-[#E9C98C]" style={{ fontFamily: "var(--font-display)" }}>
+              AirBook
+            </span>
+            <span className="text-[#E9C98C]/70">·</span>
           </div>
 
-          <h1 className="text-4xl font-bold leading-tight tracking-tight text-white [text-shadow:0_2px_16px_rgba(11,30,61,0.7)] md:text-6xl">
-            Fly on your terms.
+          <h1
+            className="text-4xl font-semibold leading-[1.1] tracking-tight text-white [text-shadow:0_2px_20px_rgba(11,30,61,0.75)] md:text-7xl"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Where next?
           </h1>
-          <p className="mt-4 max-w-md text-[#DCEEFF] [text-shadow:0_1px_8px_rgba(11,30,61,0.7)]">
+          <p className="mt-5 max-w-md text-[15px] leading-relaxed text-[#EDE3D0] [text-shadow:0_1px_8px_rgba(11,30,61,0.7)]">
             No hidden fees, no guesswork — just clear fares and a seat that&apos;s
             actually yours.
           </p>
         </div>
       </section>
 
-      
       <div
         className="relative mx-auto -mb-3 h-3 max-w-5xl bg-repeat-x"
         style={{
           backgroundImage:
-            "radial-gradient(circle, rgba(255,255,255,0.9) 2.5px, transparent 2.5px)",
+            "radial-gradient(circle, rgba(251,247,238,0.95) 2.5px, transparent 2.5px)",
           backgroundSize: "18px 18px",
           backgroundPosition: "9px 0",
         }}
@@ -109,16 +110,16 @@ export default function Home() {
 
       {/* ==================== Booking / Manage Card ==================== */}
       <section className="relative px-6 pb-16 md:px-12">
-        <div className="mx-auto max-w-5xl rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_20px_40px_-15px_rgba(37,99,235,0.25)] md:p-8">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-[#EADFC7] bg-[#FFFDF8] p-6 shadow-[0_28px_56px_-24px_rgba(11,30,61,0.35)] md:p-9">
           {/* Tab bar — stays fixed regardless of which panel is shown below */}
-          <div className="mb-6 flex gap-2 border-b border-[#DCEEFF]">
+          <div className="mb-7 flex gap-7 border-b border-[#EADFC7]">
             <button
               type="button"
               onClick={() => setActiveTab("booking")}
-              className={`px-4 py-3 text-sm font-semibold transition-colors duration-200 ${
+              className={`-mb-px pb-3 text-sm font-medium transition-colors duration-200 ${
                 activeTab === "booking"
-                  ? "border-b-2 border-[#2563EB] text-[#2563EB]"
-                  : "text-[#5C7A96] hover:text-[#16324F]"
+                  ? "border-b-2 border-[#B8863F] text-[#16324F]"
+                  : "border-b-2 border-transparent text-[#8A93A0] hover:text-[#16324F]"
               }`}
             >
               Booking
@@ -126,10 +127,10 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveTab("manage")}
-              className={`px-4 py-3 text-sm font-semibold transition-colors duration-200 ${
+              className={`-mb-px pb-3 text-sm font-medium transition-colors duration-200 ${
                 activeTab === "manage"
-                  ? "border-b-2 border-[#2563EB] text-[#2563EB]"
-                  : "text-[#5C7A96] hover:text-[#16324F]"
+                  ? "border-b-2 border-[#B8863F] text-[#16324F]"
+                  : "border-b-2 border-transparent text-[#8A93A0] hover:text-[#16324F]"
               }`}
             >
               Manage
@@ -138,16 +139,16 @@ export default function Home() {
 
           {activeTab === "booking" ? (
             <>
-              <fieldset className="mb-6 flex gap-6">
+              <fieldset className="mb-7 flex gap-6">
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="radio"
                     name="tripType"
                     checked={tripType === "ONE_WAY"}
                     onChange={() => setTripType("ONE_WAY")}
-                    className="h-4 w-4 accent-[#2563EB]"
+                    className="h-4 w-4 accent-[#B8863F]"
                   />
-                  <span className="text-sm text-[#16324F]">One Way</span>
+                  <span className="text-sm text-[#16324F]">One way</span>
                 </label>
                 <label className="flex cursor-pointer items-center gap-2">
                   <input
@@ -155,61 +156,62 @@ export default function Home() {
                     name="tripType"
                     checked={tripType === "ROUND_TRIP"}
                     onChange={() => setTripType("ROUND_TRIP")}
-                    className="h-4 w-4 accent-[#2563EB]"
+                    className="h-4 w-4 accent-[#B8863F]"
                   />
-                  <span className="text-sm text-[#16324F]">Round Trip</span>
+                  <span className="text-sm text-[#16324F]">Round trip</span>
                 </label>
               </fieldset>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                    From
-                  </label>
-                  <input
+                 <label className="mb-2 block text-sm font-semibold text-[#16324F]">
+                 From
+                 </label>
+                    <input
                     type="text"
                     value={departingPlace}
                     onChange={(e) => setDepartingPlace(e.target.value)}
                     placeholder="Tunis"
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                    To
-                  </label>
-                  <input
-                    type="text"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Paris"
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] placeholder-[#9DB6CF] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
-                  />
-                </div>
+                     className="w-full rounded-xl border-2 border-[#DCD0BA] bg-[#FAF6EC] px-6 py-5 text-2xl font-semibold text-[#16324F] placeholder-[#B3A488] outline-none transition-all duration-200 focus:border-[#B8863F] focus:bg-white focus:shadow-[0_0_0_4px_rgba(184,134,63,0.18)]"
+                 />
               </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-[#16324F]">
+                  To
+                </label>
+                <input
+                  type="text"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  placeholder="Paris"
+                  className="w-full rounded-xl border-2 border-[#DCD0BA] bg-[#FAF6EC] px-6 py-5 text-2xl font-semibold text-[#16324F] placeholder-[#B3A488] outline-none transition-all duration-200 focus:border-[#B8863F] focus:bg-white focus:shadow-[0_0_0_4px_rgba(184,134,63,0.18)]"
+                />
+              </div>
+            </div>
+            
+ 
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                    Departure Date
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
+                    Departure date
                   </label>
                   <input
                     type="date"
                     value={departureDate}
                     onChange={(e) => setDepartureDate(e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:border-[#B8863F] focus:bg-white focus:shadow-[0_0_0_3px_rgba(184,134,63,0.15)]"
                   />
                 </div>
                 {tripType === "ROUND_TRIP" && (
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
-                      Return Date
+                    <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
+                      Return date
                     </label>
                     <input
                       type="date"
                       value={returnDate}
                       onChange={(e) => setReturnDate(e.target.value)}
-                      className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                      className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:border-[#B8863F] focus:bg-white focus:shadow-[0_0_0_3px_rgba(184,134,63,0.15)]"
                     />
                   </div>
                 )}
@@ -242,9 +244,9 @@ export default function Home() {
 
               <button
                 onClick={handleSearch}
-                className="mt-6 w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3.5 font-semibold text-white transition-all duration-200 hover:-translate-y-1 hover:rounded-2xl hover:from-[#1D4ED8] hover:to-[#2563EB] hover:shadow-xl"
+                className="mt-7 w-full rounded-xl border border-[#16324F] bg-[#16324F] py-3.5 font-medium text-white transition-colors duration-200 hover:border-[#B8863F] hover:bg-[#B8863F] hover:text-[#16324F]"
               >
-                {`Search Flights - ${totalPassengers} passenger(s)`}
+                Search flights
               </button>
             </>
           ) : (
@@ -269,20 +271,20 @@ function PassengerCounter({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+      <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
         {label}
       </label>
-      <div className="flex items-center gap-3 rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-2">
+      <div className="flex items-center gap-3 rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-2">
         <button
           onClick={onDecrease}
-          className="rounded-full px-2 text-xl text-[#2563EB] transition-all duration-200 hover:scale-110 hover:bg-[#DCEEFF]"
+          className="rounded-full px-2 text-xl text-[#B8863F] transition-colors duration-200 hover:bg-[#F3E7D0]"
         >
           -
         </button>
         <span className="flex-1 text-center text-[#16324F]">{value}</span>
         <button
           onClick={onIncrease}
-          className="rounded-full px-2 text-xl text-[#2563EB] transition-all duration-200 hover:scale-110 hover:bg-[#DCEEFF]"
+          className="rounded-full px-2 text-xl text-[#B8863F] transition-colors duration-200 hover:bg-[#F3E7D0]"
         >
           +
         </button>

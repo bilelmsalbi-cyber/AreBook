@@ -1,11 +1,9 @@
-// Goes in: D:\AreBook\src\app\results\loading.tsx
-
 import PlaneLoader from "@/components/PlaneLoader";
 
-export default function ResultsLoading() {
+export default function Loading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-[#F5FAFF] to-white">
+    <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0]">
       <PlaneLoader label="Searching flights..." />
-    </div>
+    </main>
   );
 }

@@ -32,7 +32,7 @@ export default function UserMenu({ transparent = false }: { transparent?: boolea
           className={
             transparent
               ? "rounded-xl border border-white/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/10"
-              : "rounded-xl border border-[#2563EB] px-4 py-2 text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+              : "rounded-xl border border-[#B8863F] px-4 py-2 text-sm font-semibold text-[#B8863F] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FBF7EE]"
           }
         >
           Log in
@@ -41,8 +41,8 @@ export default function UserMenu({ transparent = false }: { transparent?: boolea
           href="/signup"
           className={
             transparent
-              ? "rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#1D4ED8] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
-              : "rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+              ? "rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#A97535] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+              : "rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] px-4 py-2 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
           }
         >
           Create Account
@@ -62,10 +62,10 @@ export default function UserMenu({ transparent = false }: { transparent?: boolea
         className={
           transparent
             ? "flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-white/10"
-            : "flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-[#EAF4FF]"
+            : "flex items-center gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 hover:bg-[#FBF7EE]"
         }
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-r from-[#2563EB] to-[#3B82F6] text-sm font-semibold text-white">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-r from-[#B8863F] to-[#C89A5B] text-sm font-semibold text-white">
           {initial}
         </span>
         <span
@@ -80,7 +80,7 @@ export default function UserMenu({ transparent = false }: { transparent?: boolea
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[#DCEEFF] bg-white p-2 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.3)]">
+        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[#EADFC7] bg-white p-2 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.3)]">
           <p className="truncate px-3 py-2 text-xs text-[#5C7A96]">
             {session.user.email}
           </p>

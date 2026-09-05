@@ -24,7 +24,7 @@ export default function SiteHeader() {
   }
 
   return (
-    <header className="flex items-center justify-end border-b border-[#DCEEFF] bg-white px-6 py-3 md:px-12">
+    <header className="flex items-center justify-end border-b border-[#EADFC7] bg-white px-6 py-3 md:px-12">
       <UserMenu />
     </header>
   );

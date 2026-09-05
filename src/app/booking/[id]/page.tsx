@@ -158,7 +158,7 @@ function BookingContent() {
 
   if (notFound) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF]">
+      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0]">
         <p className="text-[#5C7A96]">Trip not found.</p>
       </main>
     );
@@ -233,34 +233,34 @@ function BookingContent() {
       };
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-5xl">
           {isRoundTrip ? (
             <>
-              <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+              <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">
                 ROUND TRIP
               </p>
-              <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+              <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">
                 {outboundTrip!.departingPlace} to {outboundTrip!.destination}
               </h1>
 
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
-                  <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Outbound</p>
+                  <p className="text-sm text-[#E9C98C]">Outbound</p>
                   <p className="mt-1 text-sm text-white">
                     {outboundTrip!.departingPlace} &rarr; {outboundTrip!.destination}
                   </p>
-                  <p className="text-xs text-[#DCEEFF]">
+                  <p className="text-xs text-[#EADFC7]">
                     {new Date(outboundTrip!.departureDateTime).toLocaleString("en-GB")}
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
-                  <p className="text-xs uppercase tracking-wider text-[#DCEEFF]">Return</p>
+                  <p className="text-sm text-[#E9C98C]">Return</p>
                   <p className="mt-1 text-sm text-white">
                     {trip.departingPlace} &rarr; {trip.destination}
                   </p>
-                  <p className="text-xs text-[#DCEEFF]">
+                  <p className="text-xs text-[#EADFC7]">
                     {new Date(trip.departureDateTime).toLocaleString("en-GB")}
                   </p>
                 </div>
@@ -268,13 +268,13 @@ function BookingContent() {
             </>
           ) : (
             <>
-              <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">
+              <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">
                 {trip.plane.aircraftType}
               </p>
-              <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
+              <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">
                 {trip.departingPlace} to {trip.destination}
               </h1>
-              <p className="mt-1 text-sm text-[#DCEEFF]">
+              <p className="mt-1 text-sm text-[#EADFC7]">
                 {new Date(trip.departureDateTime).toLocaleString("en-GB")}
               </p>
             </>
@@ -331,15 +331,15 @@ function ClassCard({
   const hasDiscount = pricing.savings > 0;
 
   return (
-    <div className="flex flex-col rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-3xl hover:shadow-[0_20px_40px_-15px_rgba(37,99,235,0.3)]">
-      <div className="relative h-40 w-full overflow-hidden rounded-xl bg-[#F3F9FF]">
+    <div className="flex flex-col rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)] transition-all duration-200 hover:-translate-y-0.5 hover:rounded-3xl hover:shadow-[0_20px_40px_-15px_rgba(11,30,61,0.3)]">
+      <div className="relative h-64 w-full overflow-hidden rounded-xl bg-[#FBF7EE]">
         <Image
           src={imageSrc}
           alt=""
           fill
           priority
           sizes="100vw"
-          className="object-contain"
+          className="object-cover"
         />
       </div>
 
@@ -348,7 +348,7 @@ function ClassCard({
       <ul className="mt-3 flex-1 space-y-2">
         {features.map((feature) => (
           <li key={feature} className="flex items-start gap-2 text-sm text-[#5C7A96]">
-            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3B82F6]" />
+            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#C89A5B]" />
             {feature}
           </li>
         ))}
@@ -357,10 +357,10 @@ function ClassCard({
       <div className="mt-5">
         {hasDiscount ? (
           <>
-            <p className="text-sm text-[#9DB6CF] line-through">
+            <p className="text-sm text-[#B3A488] line-through">
               {pricing.original.toFixed(2)} TND
             </p>
-            <p className="text-3xl font-bold text-[#16324F]">
+            <p className="font-display text-3xl font-semibold tracking-tight text-[#16324F]">
               {pricing.discounted.toFixed(2)} TND
             </p>
             <p className="mt-1 text-sm font-medium text-emerald-600">
@@ -368,7 +368,7 @@ function ClassCard({
             </p>
           </>
         ) : (
-          <p className="text-3xl font-bold text-[#16324F]">
+          <p className="font-display text-3xl font-semibold tracking-tight text-[#16324F]">
             {pricing.discounted.toFixed(2)} TND
           </p>
         )}
@@ -385,7 +385,7 @@ function ClassCard({
         onClick={onConfirm}
         className={
           available && !isBooking
-          ? "mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl"
+          ? "mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl"
          : "mt-4 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-gray-300 py-3 font-semibold text-gray-500"
         }
       >

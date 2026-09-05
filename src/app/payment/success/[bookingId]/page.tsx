@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import PlaneLoader from "@/components/PlaneLoader";
 
 type TripInfo = {
   departingPlace: string;
@@ -66,8 +67,8 @@ function SuccessContent() {
 
   if (!booking) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-        <p className="text-sm text-[#5C7A96]">Confirming your payment…</p>
+      <main className="flex min-h-screen items-center justify-center bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0]">
+        <PlaneLoader label="Confirming your payment…" />
       </main>
     );
   }
@@ -75,24 +76,24 @@ function SuccessContent() {
   const returnLeg = booking.linkedBooking;
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-10 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-10 md:px-12">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-[#DCEEFF]">
+          <p className="text-sm font-semibold text-[#EADFC7]">
             Payment Successful
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-white">Your booking is confirmed</h1>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-white">Your booking is confirmed</h1>
         </div>
       </section>
 
       <section className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-md space-y-6">
-          <div className="rounded-2xl border border-[#DCEEFF] bg-white p-8 text-center shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
-            <p className="text-xs uppercase tracking-widest text-[#5C7A96]">
+          <div className="rounded-2xl border border-[#EADFC7] bg-white p-8 text-center shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]">
+            <p className="text-sm text-[#5C7A96]">
               Booking Reference (PNR)
               {returnLeg && " — covers both flights"}
             </p>
-            <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-[#2563EB]">
+            <p className="mt-2 font-mono text-4xl font-bold tracking-[0.3em] text-[#B8863F]">
               {booking.pnr}
             </p>
             <p className="mt-3 text-xs text-[#5C7A96]">
@@ -104,7 +105,7 @@ function SuccessContent() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
+          <div className="rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]">
             <p className="text-sm font-semibold text-[#16324F]">
               {returnLeg ? "Outbound: " : ""}
               {booking.trip.departingPlace} → {booking.trip.destination}
@@ -126,7 +127,7 @@ function SuccessContent() {
               </>
             )}
 
-            <div className="mt-4 space-y-1 border-t border-[#DCEEFF] pt-4">
+            <div className="mt-4 space-y-1 border-t border-[#EADFC7] pt-4">
               {booking.passengers.map((p, i) => (
                 <p key={i} className="text-sm text-[#16324F]">
                   {p.person.firstName} {p.person.lastName}
@@ -137,9 +138,16 @@ function SuccessContent() {
 
           <Link
             href={`/invoice/${bookingId}?token=${token}`}
-            className="block w-full rounded-xl border border-[#2563EB] py-3 text-center text-sm font-semibold text-[#2563EB] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EAF4FF]"
+            className="block w-full rounded-xl border border-[#B8863F] py-3 text-center text-sm font-semibold text-[#B8863F] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#FBF7EE]"
           >
             View Full Invoice
+          </Link>
+
+          <Link
+            href="/"
+            className="block w-full py-2 text-center text-sm font-medium text-[#5C7A96] transition-colors duration-200 hover:text-[#16324F]"
+          >
+            Back to home page
           </Link>
         </div>
       </section>

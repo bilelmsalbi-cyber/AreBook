@@ -51,19 +51,19 @@ export default function SignupPage() {
 
   if (submitted) {
     return (
-      <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-        <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+      <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+        <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
           <div className="mx-auto max-w-5xl">
-            <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">ARE BOOK</p>
-            <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Check your email</h1>
+            <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">ARE BOOK</p>
+            <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">Check your email</h1>
           </div>
         </section>
         <section className="px-6 py-10 md:px-12">
-          <div className="mx-auto max-w-md rounded-2xl border border-[#DCEEFF] bg-white p-6 text-center shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
+          <div className="mx-auto max-w-md rounded-2xl border border-[#EADFC7] bg-white p-6 text-center shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]">
             <p>
               We sent a confirmation link to <strong>{form.email}</strong>. Click it to
               activate your account, then{" "}
-              <Link href="/login" className="font-semibold text-[#2563EB]">
+              <Link href="/login" className="font-semibold text-[#B8863F]">
                 log in
               </Link>
               .
@@ -75,21 +75,21 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-linear-to-b from-white via-[#F3F9FF] to-[#E1F0FF] text-[#16324F]">
-      <section className="bg-linear-to-r from-[#1D4ED8] via-[#2563EB] to-[#60A5FA] px-6 py-8 md:px-12">
+    <main className="min-h-screen bg-linear-to-b from-white via-[#FBF7EE] to-[#F3E7D0] text-[#16324F]">
+      <section className="bg-linear-to-r from-[#0B1E3D] via-[#16324F] to-[#2C4A6E] px-6 py-8 md:px-12">
         <div className="mx-auto max-w-5xl">
-          <p className="font-mono text-xs tracking-[0.2em] text-[#DCEEFF]">ARE BOOK</p>
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">Create your account</h1>
+          <p className="font-mono text-xs tracking-[0.2em] text-[#EADFC7]">ARE BOOK</p>
+          <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white md:text-3xl">Create your account</h1>
         </div>
       </section>
 
       <section className="px-6 py-10 md:px-12">
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-2xl border border-[#DCEEFF] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(37,99,235,0.2)]">
+          <div className="rounded-2xl border border-[#EADFC7] bg-white p-6 shadow-[0_15px_35px_-15px_rgba(11,30,61,0.2)]">
             <button
               type="button"
               onClick={handleGoogleSignUp}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#CFE3FA] bg-white py-3 font-semibold text-[#16324F] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#E8DFCC] bg-white py-3 font-semibold text-[#16324F] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
               <svg width="18" height="18" viewBox="0 0 18 18">
                 <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.62z" />
@@ -101,15 +101,15 @@ export default function SignupPage() {
             </button>
 
             <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-[#DCEEFF]" />
+              <div className="h-px flex-1 bg-[#EADFC7]" />
               <span className="text-xs text-[#5C7A96]">or</span>
-              <div className="h-px flex-1 bg-[#DCEEFF]" />
+              <div className="h-px flex-1 bg-[#EADFC7]" />
             </div>
 
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     First Name
                   </label>
                   <input
@@ -117,11 +117,11 @@ export default function SignupPage() {
                     required
                     value={form.firstName}
                     onChange={(e) => updateField("firstName", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Last Name
                   </label>
                   <input
@@ -129,11 +129,11 @@ export default function SignupPage() {
                     required
                     value={form.lastName}
                     onChange={(e) => updateField("lastName", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Email
                   </label>
                   <input
@@ -141,11 +141,11 @@ export default function SignupPage() {
                     required
                     value={form.email}
                     onChange={(e) => updateField("email", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Phone
                   </label>
                   <input
@@ -153,24 +153,24 @@ export default function SignupPage() {
                     required
                     value={form.phone}
                     onChange={(e) => updateField("phone", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Gender
                   </label>
                   <select
                     value={form.gender}
                     onChange={(e) => updateField("gender", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   >
                     <option value="Mr">Mr</option>
                     <option value="Mme">Mme</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Date of Birth
                   </label>
                   <input
@@ -178,11 +178,11 @@ export default function SignupPage() {
                     required
                     value={form.dateBirth}
                     onChange={(e) => updateField("dateBirth", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-[#5C7A96]">
+                  <label className="mb-1.5 block text-sm font-medium text-[#5C7A96]">
                     Password
                   </label>
                   <input
@@ -191,7 +191,7 @@ export default function SignupPage() {
                     minLength={8}
                     value={form.password}
                     onChange={(e) => updateField("password", e.target.value)}
-                    className="w-full rounded-lg border border-[#CFE3FA] bg-[#F8FBFF] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#2563EB] focus:bg-white focus:shadow-md"
+                    className="w-full rounded-lg border border-[#E8DFCC] bg-[#FAF6EC] px-4 py-3 text-[#16324F] outline-none transition-all duration-200 focus:-translate-y-0.5 focus:rounded-xl focus:border-[#B8863F] focus:bg-white focus:shadow-md"
                   />
                 </div>
               </div>
@@ -201,14 +201,14 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-6 w-full rounded-xl bg-linear-to-r from-[#2563EB] to-[#3B82F6] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl disabled:opacity-60"
+                className="mt-6 w-full rounded-xl bg-linear-to-r from-[#B8863F] to-[#C89A5B] py-3 font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:rounded-2xl hover:shadow-xl disabled:opacity-60"
               >
                 {loading ? "Creating account..." : "Create Account"}
               </button>
 
               <p className="mt-4 text-center text-sm text-[#5C7A96]">
                 Already have an account?{" "}
-                <Link href="/login" className="font-semibold text-[#2563EB]">
+                <Link href="/login" className="font-semibold text-[#B8863F]">
                   Log in
                 </Link>
               </p>
