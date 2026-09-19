@@ -33,7 +33,7 @@ export default function AdminSidebar({
         <div className="w-60 shrink-0">
           <div className="border-b border-[#1E293B] px-5 py-5">
             <p className="font-mono text-xs tracking-[0.25em] text-[#64748B]">
-              ARE BOOK
+              AIR BOOK
             </p>
             <p className="mt-1 text-sm font-semibold text-white">
               Staff Console
